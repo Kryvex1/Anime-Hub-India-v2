@@ -89,14 +89,6 @@ export function Footer() {
                   <IconPopular width={13} height={13} /> Popular Series
                 </Link>
               </li>
-              <li>
-                <Link
-                  to="/genres"
-                  className="flex items-center gap-1.5 transition hover:text-[#818cf8] hover:translate-x-0.5 duration-200"
-                >
-                  <IconGenres width={13} height={13} /> Anime Genres
-                </Link>
-              </li>
             </ul>
           </div>
 

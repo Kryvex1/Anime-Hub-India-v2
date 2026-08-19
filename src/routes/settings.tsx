@@ -1,33 +1,18 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Palette,
-  Shield,
-  ShieldAlert,
-  Skull,
-  RotateCcw,
-  Check,
-  Zap,
-  Sliders,
-  Eye,
-  Trash2,
-  Database,
-  Sparkles,
-} from "lucide-react";
+import { Palette, RotateCcw, Check, Zap, Sliders, Trash2, Database } from "lucide-react";
 import { THEME_OPTIONS, useAppSettings, ThemeId } from "@/lib/settings";
 import { clearAllAppCache } from "@/lib/tmdb";
-import { AdultConfirmModal } from "@/components/anime/adult-confirm-modal";
 import { FilterLoadingModal } from "@/components/anime/filter-loading-modal";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings & Themes — AniStream" },
+      { title: "Settings & Themes — CineAnime Hub" },
       {
         name: "description",
-        content:
-          "Customize website colors, accent themes, content filters, and playback preferences.",
+        content: "Customize website colors, accent themes, and playback preferences.",
       },
     ],
   }),
@@ -67,8 +52,6 @@ function Switch({
 function SettingsPage() {
   const { settings, updateSetting, resetSettings } = useAppSettings();
   const queryClient = useQueryClient();
-  const [showAdultModal, setShowAdultModal] = useState(false);
-  const [pendingAdultMode, setPendingAdultMode] = useState<"include" | "only">("include");
   const [isLoading, setIsLoading] = useState(false);
 
   const runFilterTransition = (action: () => void) => {
@@ -97,37 +80,6 @@ function SettingsPage() {
     updateSetting("theme", themeId);
   };
 
-  const handleNormalToggle = (checked: boolean) => {
-    if (checked) {
-      runFilterTransition(() => updateSetting("normalMode", true));
-    }
-  };
-
-  const handleOnlyAdultToggle = (checked: boolean) => {
-    if (checked) {
-      setPendingAdultMode("only");
-      setShowAdultModal(true);
-    } else {
-      runFilterTransition(() => updateSetting("onlyAdultMode", false));
-    }
-  };
-
-  const handleConfirmAdult = () => {
-    if (pendingAdultMode === "only") {
-      runFilterTransition(() => updateSetting("onlyAdultMode", true));
-    } else {
-      runFilterTransition(() => updateSetting("adultMode", true));
-    }
-  };
-
-  const handleSafeToggle = (checked: boolean) => {
-    runFilterTransition(() => updateSetting("safeMode", checked));
-  };
-
-  const handleDarkGoreToggle = (checked: boolean) => {
-    runFilterTransition(() => updateSetting("darkGoreMode", checked));
-  };
-
   const handleClearAllStorage = () => {
     runFilterTransition(() => {
       clearAllAppCache(true);
@@ -150,7 +102,7 @@ function SettingsPage() {
             Website Settings
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Personalize website colors, content viewing filters, and playback preferences.
+            Personalize website colors and playback preferences.
           </p>
         </div>
 
@@ -216,144 +168,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* 2. CONTENT FILTERS & SPECIAL MODES */}
-      <section className="space-y-4 pt-2">
-        <div className="flex items-center gap-2 text-white font-bold text-base sm:text-lg">
-          <Eye className="w-5 h-5 text-[var(--brand-glow)]" />
-          <h2>Content Viewing Modes</h2>
-        </div>
-        <p className="text-xs text-slate-400 -mt-2">
-          Toggle custom modes for your browsing and discovery experience.
-        </p>
-
-        <div className="space-y-3">
-          {/* NORMAL MODE (DEFAULT ON) */}
-          <div className="group relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[#0b0f19]/90 border border-white/[0.07] hover:border-white/15 transition-all duration-300 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)]">
-            <div className="flex items-start justify-between gap-3.5 sm:gap-4">
-              <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 flex-1">
-                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[var(--brand-glow)] shrink-0 mt-0.5 shadow-inner">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                      Normal Mode (All Anime)
-                    </h3>
-                    {settings.normalMode && (
-                      <span className="inline-flex items-center shrink-0 whitespace-nowrap rounded-full bg-indigo-500/15 text-[var(--brand-glow)] text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 border border-indigo-500/30">
-                        Default Active
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                    Unrestricted anime discovery. Browse all action, shonen, romance, fantasy, and
-                    trending series freely with zero barriers.
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 pt-0.5">
-                <Switch checked={settings.normalMode} onChange={handleNormalToggle} />
-              </div>
-            </div>
-          </div>
-
-          {/* ONLY 18+ ADULT MODE */}
-          <div className="group relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[#0b0f19]/90 border border-white/[0.07] hover:border-white/15 transition-all duration-300 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)]">
-            <div className="flex items-start justify-between gap-3.5 sm:gap-4">
-              <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 flex-1">
-                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0 mt-0.5 shadow-inner">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                      Only 18+ Mature Mode
-                    </h3>
-                    {settings.onlyAdultMode && (
-                      <span className="inline-flex items-center shrink-0 whitespace-nowrap rounded-full bg-rose-500/15 text-rose-300 text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 border border-rose-500/30">
-                        Active (18+ Only)
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                    Exclusively filters and displays 18+ adult, uncensored, and ecchi anime titles
-                    across feeds.
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 pt-0.5">
-                <Switch checked={settings.onlyAdultMode} onChange={handleOnlyAdultToggle} />
-              </div>
-            </div>
-          </div>
-
-          {/* SAFE FAMILY MODE */}
-          <div className="group relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[#0b0f19]/90 border border-white/[0.07] hover:border-white/15 transition-all duration-300 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)]">
-            <div className="flex items-start justify-between gap-3.5 sm:gap-4">
-              <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 flex-1">
-                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5 shadow-inner">
-                  <Shield className="w-5 h-5" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                      Safe Family Mode
-                    </h3>
-                    {settings.safeMode && (
-                      <span className="inline-flex items-center shrink-0 whitespace-nowrap rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 border border-emerald-500/30">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                    100% clean family-friendly mode. Completely filters out all suggestive, ecchi,
-                    and mature content.
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 pt-0.5">
-                <Switch checked={settings.safeMode} onChange={handleSafeToggle} />
-              </div>
-            </div>
-          </div>
-
-          {/* DARK PSYCHOLOGICAL / GORE MODE */}
-          <div className="group relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[#0b0f19]/90 border border-white/[0.07] hover:border-white/15 transition-all duration-300 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)]">
-            <div className="flex items-start justify-between gap-3.5 sm:gap-4">
-              <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 flex-1">
-                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0 mt-0.5 shadow-inner">
-                  <Skull className="w-5 h-5" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                      Dark Thriller / Gore Mode
-                    </h3>
-                    {settings.darkGoreMode && (
-                      <span className="inline-flex items-center shrink-0 whitespace-nowrap rounded-full bg-purple-500/15 text-purple-300 text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 border border-purple-500/30">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                    Prioritizes psychological mind-game thrillers, dark sci-fi, horror, and
-                    action-packed gore anime (e.g. Berserk, Tokyo Ghoul, Chainsaw Man).
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 pt-0.5">
-                <Switch checked={settings.darkGoreMode} onChange={handleDarkGoreToggle} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. PLAYBACK PREFERENCES */}
+      {/* 2. PLAYBACK PREFERENCES */}
       <section className="space-y-4 pt-2">
         <div className="flex items-center gap-2 text-white font-bold text-base sm:text-lg">
           <Zap className="w-5 h-5 text-[var(--brand-glow)]" />
@@ -383,7 +198,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* 4. STORAGE & DATA MANAGEMENT */}
+      {/* 3. STORAGE & DATA MANAGEMENT */}
       <section className="space-y-4 pt-2">
         <div className="flex items-center gap-2 text-white font-bold text-base sm:text-lg">
           <Database className="w-5 h-5 text-rose-400" />
@@ -413,13 +228,6 @@ function SettingsPage() {
           </div>
         </div>
       </section>
-
-      {/* Clean 18+ Confirmation Modal */}
-      <AdultConfirmModal
-        isOpen={showAdultModal}
-        onClose={() => setShowAdultModal(false)}
-        onConfirm={handleConfirmAdult}
-      />
     </div>
   );
 }

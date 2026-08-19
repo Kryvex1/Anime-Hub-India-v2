@@ -81,7 +81,7 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
         {/* Error Alert */}
         {error && (
           <div className="fade-up mt-5 flex items-start gap-3 rounded-2xl border border-destructive/50 bg-destructive/15 p-3.5 text-xs text-destructive-foreground">
-            <span className="shrink-0 text-base">⛔</span>
+            <IconShield width={16} height={16} className="shrink-0 text-red-400 mt-0.5" />
             <div className="space-y-0.5">
               <p className="font-semibold">{error}</p>
               <p className="text-[11px] text-destructive-foreground/80">

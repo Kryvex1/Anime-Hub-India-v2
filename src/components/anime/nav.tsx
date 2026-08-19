@@ -22,7 +22,6 @@ const LINKS = [
   { to: "/browse", label: "Browse", Icon: IconAnime },
   { to: "/trending", label: "Trending", Icon: IconTrending },
   { to: "/popular", label: "Popular", Icon: IconPopular },
-  { to: "/genres", label: "Genres", Icon: IconGenres },
   { to: "/watchlist", label: "Watchlist", Icon: IconBookmark },
 ] as const;
 
@@ -30,8 +29,7 @@ const MOBILE = [
   { to: "/", label: "Home", Icon: IconHome, exact: true },
   { to: "/browse", label: "Browse", Icon: IconAnime },
   { to: "/search", label: "Search", Icon: IconSearch },
-  { to: "/genres", label: "Genres", Icon: IconGenres },
-  { to: "/watchlist", label: "List", Icon: IconBookmark },
+  { to: "/watchlist", label: "Watchlist", Icon: IconBookmark },
 ] as const;
 
 export function Logo({ className, compact = false }: { className?: string; compact?: boolean }) {
@@ -62,12 +60,12 @@ export function Header() {
   const navigate = useNavigate();
   const pathname = router.state.location.pathname;
 
-  // Do not show header on search, genres, watchlist, or admin panel
+  // Do not show header on search, watchlist, admin panel, or watch player page
   if (
     pathname === "/search" ||
-    pathname.startsWith("/genres") ||
     pathname.startsWith("/watchlist") ||
-    pathname.startsWith("/data/admin")
+    pathname.startsWith("/data/admin") ||
+    pathname.includes("/watch")
   ) {
     return null;
   }
@@ -197,8 +195,8 @@ export function BottomNav() {
   const router = useRouter();
   const pathname = router.state.location.pathname;
 
-  // Do not show bottom nav on admin panel
-  if (pathname.startsWith("/data/admin")) {
+  // Do not show bottom nav on admin panel or watch player page
+  if (pathname.startsWith("/data/admin") || pathname.includes("/watch")) {
     return null;
   }
 

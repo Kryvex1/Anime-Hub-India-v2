@@ -82,10 +82,14 @@ export function LoadMoreList({
       ) : !isPending && items.length === 0 ? (
         <EmptyState title={emptyTitle} hint={emptyHint} />
       ) : (
-        <Grid items={items} loading={isPending || (isFetching && page > 1)} ranked={!!ranked} />
+        <Grid
+          items={ranked ? items.slice(0, 10) : items}
+          loading={isPending || (isFetching && page > 1)}
+          ranked={!!ranked}
+        />
       )}
 
-      {hasMore && (
+      {hasMore && !ranked && (
         <div className="mt-10 flex justify-center">
           <button
             disabled={isFetching}

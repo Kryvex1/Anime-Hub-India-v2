@@ -6,9 +6,9 @@ import { fetchTrending } from "@/lib/anime.functions";
 export const Route = createFileRoute("/trending")({
   head: () => ({
     meta: [
-      { title: "Trending Anime This Week — AniStream" },
+      { title: "Trending Anime This Week — CineAnime Hub" },
       { name: "description", content: "The anime everyone is watching right now, ranked weekly." },
-      { property: "og:title", content: "Trending Anime This Week — AniStream" },
+      { property: "og:title", content: "Trending Anime This Week — CineAnime Hub" },
       {
         property: "og:description",
         content: "The anime everyone is watching right now, ranked weekly.",
@@ -25,8 +25,7 @@ function TrendingPage() {
       fetchPage={(page) => fetchTrending({ data: { page } })}
       eyebrow="This week"
       title="Trending Anime"
-      description="Ranked by what the community is watching and rating right now."
-      ranked
+      description="The most popular anime series trending this week."
     />
   );
 }

@@ -1,12 +1,12 @@
 {
-  "projectId": "steady-axe-cmbw7",
-  "appId": "1:756203454868:web:c616f0a25774f0da4a0f81",
-  "apiKey": "AIzaSyCDaShDhZQeUNFonqqpYIfNfwO-WlX35d8",
-  "authDomain": "steady-axe-cmbw7.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-cineanimehub8c4e-a5484707-44b7-45f9-8b56-4aa678c8261c",
-  "storageBucket": "steady-axe-cmbw7.firebasestorage.app",
-  "messagingSenderId": "756203454868",
+  "projectId": "animehubindia-b3c58",
+  "appId": "1:9403768832:web:c82c8cbd4658daa4bcb8e5",
+  "apiKey": "AIzaSyA_tIhhu5sOrgP22osO6eZ-oB7MQkGFM84",
+  "authDomain": "animehubindia-b3c58.firebaseapp.com",
+  "databaseURL": "https://animehubindia-b3c58-default-rtdb.asia-southeast1.firebasedatabase.app",
+  "storageBucket": "animehubindia-b3c58.firebasestorage.app",
+  "messagingSenderId": "9403768832",
   "measurementId": "",
-  "oAuthClientId": "756203454868-cr3l200aikk8t69enq51u1r37c1bjrnl.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }

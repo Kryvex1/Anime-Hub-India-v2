@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -16,11 +16,13 @@ import {
   getEpisodeId,
   fetchEpisodeConfig,
   fetchSeasonEpisodesConfig,
+  fetchAnimeConfiguredEpisodes,
 } from "@/lib/episodes.firebase";
 import { checkAdminSession } from "@/lib/admin-auth";
 import { cleanStreamUrl } from "@/lib/stream-utils";
 import { Img, img } from "./media";
 import { ComingSoonModal } from "./coming-soon-modal";
+import { animateCardStagger } from "@/lib/anime-animation";
 import {
   IconBack,
   IconPlay,
@@ -56,6 +58,7 @@ export function AnimePlayer({
 }: AnimePlayerProps) {
   const navigate = useNavigate();
   const playerWrapperRef = useRef<HTMLDivElement | null>(null);
+  const epGridRef = useRef<HTMLDivElement | null>(null);
 
   const safeInitialSeason = Math.max(1, Number(initialSeasonNumber) || 1);
   const safeInitialEpisode = Math.max(1, Number(initialEpisodeNumber) || 1);
@@ -63,7 +66,6 @@ export function AnimePlayer({
   const [currentSeasonNum, setCurrentSeasonNum] = useState<number>(safeInitialSeason);
   const [currentEpisodeNum, setCurrentEpisodeNum] = useState<number>(safeInitialEpisode);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [requestedPriority, setRequestedPriority] = useState(false);
 
   const [showComingSoonModal, setShowComingSoonModal] = useState(false);
   const [preferredServer, setPreferredServer] = useState<1 | 2>(() => {
@@ -94,13 +96,41 @@ export function AnimePlayer({
     }
   }, [initialSeasonNumber, initialEpisodeNumber]);
 
-  // Fetch Anime details with high staleTime and aggressive cache
+  // Fetch Anime details
   const { data: anime } = useQuery({
     queryKey: ["show", animeId],
     queryFn: () => fetchShow({ data: { id: animeId } }),
     staleTime: 1000 * 60 * 30,
     gcTime: 1000 * 60 * 60,
   });
+
+  // Fetch Anime Configured Episodes to know live seasons
+  const { data: animeConfiguredEpisodes } = useQuery({
+    queryKey: ["anime-configured-episodes", animeId],
+    queryFn: () => fetchAnimeConfiguredEpisodes(animeId),
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Set of season numbers that have at least 1 configured live episode
+  const configuredSeasonNumbers = useMemo(() => {
+    const set = new Set<number>();
+    (animeConfiguredEpisodes ?? []).forEach((ep) => {
+      if (ep.season && (ep.server1?.url || ep.server2?.url)) {
+        set.add(Number(ep.season));
+      }
+    });
+    return set;
+  }, [animeConfiguredEpisodes]);
+
+  // Filter seasons: Only show seasons that have at least 1 live episode (or all for admin)
+  const allSeasons = (anime?.seasons ?? []).filter(
+    (s) => s.seasonNumber > 0 && s.episodeCount > 0 && !s.name?.toLowerCase().includes("special"),
+  );
+
+  const availableSeasons = useMemo(() => {
+    const filtered = allSeasons.filter((s) => configuredSeasonNumbers.has(s.seasonNumber));
+    return filtered.length > 0 ? filtered : allSeasons.slice(0, 1);
+  }, [allSeasons, configuredSeasonNumbers]);
 
   // Fetch Season details
   const { data: seasonData, isPending: seasonPending } = useQuery({
@@ -116,6 +146,45 @@ export function AnimePlayer({
     queryFn: () => fetchSeasonEpisodesConfig(animeId, currentSeasonNum),
     staleTime: 1000 * 60 * 2,
   });
+
+  // Filtered episodes: ONLY show live episodes in the grid
+  const visibleEpisodes = useMemo(() => {
+    const rawEpisodes = seasonData?.episodes ?? [];
+    const filtered = rawEpisodes.filter((ep) => {
+      const epId = getEpisodeId(animeId, currentSeasonNum, ep.episodeNumber);
+      const epDoc = seasonFirebaseMap?.get(epId);
+      return Boolean(epDoc?.server1?.url || epDoc?.server2?.url);
+    });
+
+    return filtered;
+  }, [seasonData?.episodes, seasonFirebaseMap, animeId, currentSeasonNum]);
+
+  // Auto-switch to first available episode if current selected episode has no stream
+  useEffect(() => {
+    if (visibleEpisodes.length > 0) {
+      const exists = visibleEpisodes.some((e) => e.episodeNumber === currentEpisodeNum);
+      if (!exists) {
+        const firstLive = visibleEpisodes[0];
+        setCurrentEpisodeNum(firstLive.episodeNumber);
+        void navigate({
+          to: "/anime/$id/watch",
+          params: { id: String(animeId) },
+          search: { season: currentSeasonNum, episode: firstLive.episodeNumber },
+          replace: true,
+        });
+      }
+    }
+  }, [visibleEpisodes, currentEpisodeNum, currentSeasonNum, animeId, navigate]);
+
+  // Stagger animation for episode selector
+  useEffect(() => {
+    if (epGridRef.current && visibleEpisodes.length > 0) {
+      const cards = epGridRef.current.querySelectorAll<HTMLElement>(".player-ep-card");
+      if (cards.length > 0) {
+        animateCardStagger(Array.from(cards));
+      }
+    }
+  }, [visibleEpisodes, currentSeasonNum]);
 
   // Current Episode Metadata
   const currentEpisode =
@@ -138,10 +207,6 @@ export function AnimePlayer({
   const s2Available = Boolean(configuredS2);
   const totalServersAvailable = (s1Available ? 1 : 0) + (s2Available ? 1 : 0);
 
-  // Intelligent active server determination:
-  // If only Server 1 is available -> Active is 1
-  // If only Server 2 is available -> Active is 2
-  // If both available -> Respect user's preferred server
   let effectiveServer: 1 | 2 = 1;
   if (s1Available && !s2Available) {
     effectiveServer = 1;
@@ -181,7 +246,7 @@ export function AnimePlayer({
     };
   }, [currentStreamUrl, effectiveServer, iframeKey, isStreamAvailable]);
 
-  // Handle iframe load - completely fade out loader
+  // Handle iframe load
   const handleIframeLoad = () => {
     setTimeout(() => {
       setLoaderVisible(false);
@@ -241,14 +306,14 @@ export function AnimePlayer({
     [animeId, navigate],
   );
 
-  // Previous & Next navigation
+  // Previous & Next navigation among visible/available episodes
   const currentIndex =
-    seasonData?.episodes.findIndex((e) => e.episodeNumber === currentEpisodeNum) ?? -1;
+    visibleEpisodes.findIndex((e) => e.episodeNumber === currentEpisodeNum) ?? -1;
 
-  const prevEpisode = currentIndex > 0 ? seasonData?.episodes[currentIndex - 1] : null;
+  const prevEpisode = currentIndex > 0 ? visibleEpisodes[currentIndex - 1] : null;
   const nextEpisode =
-    currentIndex >= 0 && seasonData?.episodes && currentIndex < seasonData.episodes.length - 1
-      ? seasonData.episodes[currentIndex + 1]
+    currentIndex >= 0 && currentIndex < visibleEpisodes.length - 1
+      ? visibleEpisodes[currentIndex + 1]
       : null;
 
   // Keyboard navigation
@@ -271,14 +336,10 @@ export function AnimePlayer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [prevEpisode, nextEpisode, currentSeasonNum, handleSwitchEpisode]);
 
-  const seasons = (anime?.seasons ?? []).filter(
-    (s) => s.seasonNumber > 0 && s.episodeCount > 0 && !s.name?.toLowerCase().includes("special"),
-  );
-
   return (
-    <div className="bg-[#070A12] text-[#f1f5f9] pt-3 sm:pt-6 pb-12">
+    <div className="bg-[#070A12] text-[#f1f5f9] pt-3 sm:pt-6 pb-16">
       <div className="mx-auto max-w-[1140px] px-3 sm:px-6 space-y-4">
-        {/* 1. EPISODE HEADER (Clean & Non-overlapping) */}
+        {/* 1. EPISODE HEADER */}
         <div className="flex items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2.5 min-w-0">
             <Link
@@ -292,7 +353,7 @@ export function AnimePlayer({
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-[#818cf8] truncate">
+                <span className="text-xs font-bold text-[#818cf8] truncate">
                   {anime?.title || "Anime"}
                 </span>
                 <span className="text-white/20 text-[10px] hidden sm:inline">•</span>
@@ -307,8 +368,9 @@ export function AnimePlayer({
           </div>
 
           <div className="shrink-0 flex items-center gap-2">
-            <span className="rounded-lg bg-[#6366f1]/15 border border-[#6366f1]/30 px-2.5 py-1 text-[11px] font-bold text-[#818cf8]">
-              S{currentSeasonNum} : E{currentEpisodeNum}
+            <span className="rounded-xl bg-[#6366f1]/15 border border-[#6366f1]/30 px-3 py-1 text-xs font-black text-[#818cf8]">
+              S{String(currentSeasonNum).padStart(2, "0")} E
+              {String(currentEpisodeNum).padStart(2, "0")}
             </span>
           </div>
         </div>
@@ -373,9 +435,8 @@ export function AnimePlayer({
                 />
               </>
             ) : (
-              /* Ultra-Clean Stream Unavailable Screen with Red Sad Face Emblem */
+              /* Stream Unavailable Screen */
               <div className="absolute inset-0 bg-[#070a14] flex flex-col justify-center items-center text-center p-4 sm:p-6 gap-3 z-20 overflow-hidden">
-                {/* Background episode/anime backdrop with smooth dark gradient fade */}
                 {(currentEpisode?.still || anime?.backdrop || anime?.poster) && (
                   <div className="absolute inset-0 pointer-events-none overflow-hidden">
                     <img
@@ -390,7 +451,6 @@ export function AnimePlayer({
                   </div>
                 )}
 
-                {/* Red Sad Face Emblem */}
                 <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-lg shadow-rose-500/20 backdrop-blur-md">
                   <Frown className="w-6 h-6 animate-pulse" />
                 </div>
@@ -412,15 +472,10 @@ export function AnimePlayer({
                 </div>
 
                 <div className="flex items-center justify-center gap-2 pt-1 relative z-10">
-                  {/* Clean Info / Popup Trigger Button */}
                   <button
                     type="button"
                     onClick={() => setShowComingSoonModal(true)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl text-white transition-all duration-200 active:scale-95 cursor-pointer shadow-md"
-                    style={{
-                      background: "var(--brand-gradient, var(--brand-primary))",
-                      boxShadow: "0 0 16px rgba(var(--brand-rgb), 0.35)",
-                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl text-white transition-all duration-200 active:scale-95 cursor-pointer shadow-md bg-[#6366f1] hover:bg-[#4f46e5]"
                   >
                     <span>Episode Info & Status</span>
                   </button>
@@ -445,17 +500,16 @@ export function AnimePlayer({
           </div>
         </div>
 
-        {/* 3. STREAM STATUS & CONTROLS BAR (Sleek, No Overlap) */}
+        {/* 3. STREAM STATUS & CONTROLS BAR */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 px-3.5 py-2.5 bg-[#0D111C]/80 backdrop-blur-xl border border-white/[0.08] rounded-xl sm:rounded-2xl shadow-sm">
           {/* Server status / switch */}
           <div className="flex items-center gap-2 min-w-0">
             {totalServersAvailable === 2 ? (
-              // If 2 servers configured: Show sleek multi-server switcher
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleSwitchServer(1)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-all duration-200 active:scale-95 ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-all duration-200 active:scale-95 ${
                     effectiveServer === 1
                       ? "bg-[#6366f1] text-white shadow-sm shadow-[#6366f1]/40"
                       : "bg-white/[0.05] text-[#94a3b8] hover:text-white"
@@ -468,7 +522,7 @@ export function AnimePlayer({
                 <button
                   type="button"
                   onClick={() => handleSwitchServer(2)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-all duration-200 active:scale-95 ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-all duration-200 active:scale-95 ${
                     effectiveServer === 2
                       ? "bg-[#6366f1] text-white shadow-sm shadow-[#6366f1]/40"
                       : "bg-white/[0.05] text-[#94a3b8] hover:text-white"
@@ -479,13 +533,12 @@ export function AnimePlayer({
                 </button>
               </div>
             ) : totalServersAvailable === 1 ? (
-              // If only 1 server configured: Clean single status badge without confusing secondary buttons
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-bold">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
                 <span>HD Stream Ready</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] text-[#94a3b8] text-xs font-medium">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] text-[#94a3b8] text-xs font-medium">
                 <span className="h-1.5 w-1.5 rounded-full bg-neutral-500" />
                 <span>No Server Configured</span>
               </div>
@@ -502,8 +555,8 @@ export function AnimePlayer({
                   season: currentSeasonNum,
                   episode: currentEpisodeNum,
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-amber-500/25 transition active:scale-95"
-                title="Edit this episode link in Admin"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-amber-500/25 transition active:scale-95"
+                title="Edit this episode in Admin Episode Boxes"
               >
                 <IconSparkles width={13} height={13} />
                 <span className="hidden sm:inline">Admin Edit</span>
@@ -513,7 +566,7 @@ export function AnimePlayer({
             <button
               type="button"
               onClick={handleReloadStream}
-              className="p-1.5 rounded-lg text-[#94a3b8] hover:text-white hover:bg-white/[0.08] transition cursor-pointer active:scale-90"
+              className="p-2 rounded-xl text-[#94a3b8] hover:text-white hover:bg-white/[0.08] transition cursor-pointer active:scale-90"
               title="Reload Stream"
             >
               <IconRotateCw width={15} height={15} />
@@ -522,7 +575,7 @@ export function AnimePlayer({
             <button
               type="button"
               onClick={handleToggleFullscreen}
-              className="p-1.5 rounded-lg text-[#94a3b8] hover:text-white hover:bg-white/[0.08] transition cursor-pointer active:scale-90"
+              className="p-2 rounded-xl text-[#94a3b8] hover:text-white hover:bg-white/[0.08] transition cursor-pointer active:scale-90"
               title="Fullscreen"
             >
               <svg className="h-4 w-4 stroke-current fill-none stroke-[2]" viewBox="0 0 24 24">
@@ -611,16 +664,16 @@ export function AnimePlayer({
         <div className="bg-[#0D111C]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-4 sm:p-5 space-y-3.5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-white/[0.06]">
             <div>
-              <h3 className="text-sm font-bold text-white">Episodes & Seasons</h3>
+              <h3 className="text-sm font-bold text-white">Live Episodes</h3>
               <p className="text-[11px] text-[#94a3b8]">
-                Select any episode to start streaming immediately.
+                Select any available episode to start streaming immediately.
               </p>
             </div>
 
             {/* Season Selector Tabs */}
-            {seasons.length > 1 && (
+            {availableSeasons.length > 1 && (
               <div className="scrollbar-none flex gap-1.5 overflow-x-auto pb-1">
-                {seasons.map((s) => (
+                {availableSeasons.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => {
@@ -632,7 +685,7 @@ export function AnimePlayer({
                         search: { season: s.seasonNumber, episode: 1 },
                       });
                     }}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-bold whitespace-nowrap transition cursor-pointer active:scale-95 ${
+                    className={`rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition cursor-pointer active:scale-95 ${
                       s.seasonNumber === currentSeasonNum
                         ? "bg-[#6366f1] text-white shadow-md shadow-[#6366f1]/30"
                         : "bg-white/[0.05] text-[#94a3b8] hover:text-white"
@@ -649,12 +702,25 @@ export function AnimePlayer({
           {seasonPending ? (
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-20 rounded-xl bg-white/[0.03] animate-pulse" />
+                <div key={i} className="h-20 rounded-2xl bg-white/[0.03] animate-pulse" />
               ))}
             </div>
+          ) : visibleEpisodes.length === 0 ? (
+            <div className="py-12 text-center text-xs text-[#94a3b8] space-y-2">
+              <p>No live stream links available for this season yet.</p>
+              {isAdmin && (
+                <Link
+                  to="/data/admin"
+                  search={{ animeId, season: currentSeasonNum }}
+                  className="inline-block rounded-xl bg-[#6366f1] px-4 py-2 text-xs font-bold text-white hover:bg-[#4f46e5]"
+                >
+                  Add Links in Admin Panel →
+                </Link>
+              )}
+            </div>
           ) : (
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {seasonData?.episodes.map((ep) => {
+            <div ref={epGridRef} className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleEpisodes.map((ep) => {
                 const isCurrent = ep.episodeNumber === currentEpisodeNum;
                 const epId = getEpisodeId(animeId, currentSeasonNum, ep.episodeNumber);
                 const epFbConfig = seasonFirebaseMap?.get(epId);
@@ -666,25 +732,25 @@ export function AnimePlayer({
                   <button
                     key={ep.id}
                     onClick={() => handleSwitchEpisode(currentSeasonNum, ep.episodeNumber)}
-                    className={`group flex w-full min-w-0 max-w-full items-start gap-2.5 overflow-hidden rounded-xl p-2 text-left transition-all duration-200 bg-[#111622]/70 backdrop-blur-md border cursor-pointer active:scale-[0.98] ${
+                    className={`player-ep-card group flex w-full min-w-0 max-w-full items-start gap-2.5 overflow-hidden rounded-2xl p-2.5 text-left transition-all duration-200 bg-[#111622]/70 backdrop-blur-md border cursor-pointer active:scale-[0.98] ${
                       isCurrent
-                        ? "border-[#818cf8] bg-[#6366f1]/15 ring-1 ring-[#818cf8]/50"
+                        ? "border-[#818cf8] bg-[#6366f1]/20 ring-1 ring-[#818cf8]/50 shadow-[0_4px_20px_rgba(99,102,241,0.25)]"
                         : "border-white/[0.06] hover:border-white/15 hover:bg-[#151b2a]"
                     }`}
                   >
-                    <div className="relative aspect-video w-20 shrink-0 overflow-hidden rounded-lg bg-black/60">
+                    <div className="relative aspect-video w-20 shrink-0 overflow-hidden rounded-xl bg-black/60">
                       <Img
                         src={img(ep.still || anime?.poster, "w300")}
                         alt={ep.name}
                         className="h-full w-full object-cover"
-                        rounded="rounded-lg"
+                        rounded="rounded-xl"
                       />
-                      <div className="absolute top-1 left-1 rounded bg-black/70 px-1 py-0.2 text-[9px] font-bold text-white">
+                      <div className="absolute top-1 left-1 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-black text-white">
                         EP {ep.episodeNumber}
                       </div>
                       {isCurrent && (
-                        <div className="absolute inset-0 grid place-items-center bg-black/60">
-                          <span className="grid h-6 w-6 place-items-center rounded-full bg-[#6366f1] text-white shadow-md shadow-[#6366f1]/50">
+                        <div className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-xs">
+                          <span className="grid h-6 w-6 place-items-center rounded-full bg-[#6366f1] text-white shadow-md shadow-[#6366f1]/50 animate-pulse">
                             <IconPlay width={12} height={12} />
                           </span>
                         </div>

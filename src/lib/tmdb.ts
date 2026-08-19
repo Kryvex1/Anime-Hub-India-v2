@@ -674,19 +674,45 @@ export async function searchAnime(
   const includeAdult = options?.bypassFilter || userSettings?.adultMode ? "true" : "false";
 
   try {
-    const data = await tmdb<{ results: Show[]; total_pages: number }>(
-      "/search/tv",
-      {
-        query,
-        page,
-        include_adult: includeAdult,
-      },
-      signal,
+    const [tvData, movieData] = await Promise.all([
+      tmdb<{ results: Show[]; total_pages: number }>(
+        "/search/tv",
+        {
+          query,
+          page,
+          include_adult: includeAdult,
+        },
+        signal,
+      ).catch(() => ({ results: [] as Show[], total_pages: 0 })),
+      tmdb<{ results: Show[]; total_pages: number }>(
+        "/search/movie",
+        {
+          query,
+          page,
+          include_adult: includeAdult,
+        },
+        signal,
+      ).catch(() => ({ results: [] as Show[], total_pages: 0 })),
+    ]);
+
+    const tvList = (tvData.results ?? []).map((s) => ({ ...s, media_type: s.media_type || "tv" }));
+    const movieList = (movieData.results ?? []).map((s) => ({ ...s, media_type: "movie" }));
+
+    // Combined results sorted by popularity
+    const rawList = [...tvList, ...movieList].sort(
+      (a, b) => (b.popularity ?? 0) - (a.popularity ?? 0),
     );
 
-    const rawList = data.results ?? [];
+    // For admin mode (bypassFilter: true): return ALL results (Series + Movies) without dropping
+    if (options?.bypassFilter) {
+      return {
+        page: 1,
+        totalPages: Math.max(tvData.total_pages ?? 1, movieData.total_pages ?? 1, 1),
+        items: rawList.map(toCard),
+      };
+    }
 
-    // Filter anime: Japanese/Korean/Chinese origin or language, or Animation genre
+    // For normal user mode: filter anime (Japanese/Korean/Chinese or Animation genre)
     const isLikelyAnime = (s: Show) => {
       const isEastAsianLang = ["ja", "ko", "zh"].includes(s.original_language || "");
       const isJapanOrigin = s.origin_country?.some((c) => ["JP", "KR"].includes(c));
@@ -694,7 +720,9 @@ export async function searchAnime(
       return (
         (isEastAsianLang || isJapanOrigin || isAnimation) &&
         !NON_ANIME_CARTOON_BLOCKLIST.some((k) =>
-          (s.name || s.original_name || "").toLowerCase().includes(k),
+          (s.name || s.title || s.original_name || s.original_title || "")
+            .toLowerCase()
+            .includes(k),
         )
       );
     };
@@ -704,13 +732,11 @@ export async function searchAnime(
       items = rawList;
     }
 
-    if (!options?.bypassFilter) {
-      items = items.filter((s) => isFilteredAnime(s, userSettings));
-    }
+    items = items.filter((s) => isFilteredAnime(s, userSettings));
 
     return {
       page: 1,
-      totalPages: data.total_pages ?? 1,
+      totalPages: Math.max(tvData.total_pages ?? 1, movieData.total_pages ?? 1, 1),
       items: items.map(toCard),
     };
   } catch {
@@ -723,146 +749,273 @@ export async function searchAnime(
 }
 
 export async function details(id: number): Promise<ShowDetails> {
-  const [show, credits, recs, videos] = await Promise.all([
-    tmdb<
-      Show & {
-        last_air_date?: string;
-        number_of_seasons?: number;
-        number_of_episodes?: number;
-        episode_run_time?: number[];
-        origin_country?: string[];
-        production_countries?: { iso_3166_1: string; name: string }[];
-        production_companies?: { id: number; name: string }[];
-        genres?: { id: number; name: string }[];
-        seasons?: {
+  // First attempt: TV Series endpoint
+  try {
+    const [show, credits, recs, videos] = await Promise.all([
+      tmdb<
+        Show & {
+          last_air_date?: string;
+          number_of_seasons?: number;
+          number_of_episodes?: number;
+          episode_run_time?: number[];
+          origin_country?: string[];
+          production_countries?: { iso_3166_1: string; name: string }[];
+          production_companies?: { id: number; name: string }[];
+          genres?: { id: number; name: string }[];
+          seasons?: {
+            id: number;
+            season_number: number;
+            name?: string;
+            episode_count?: number;
+            poster_path?: string | null;
+            overview?: string;
+            air_date?: string | null;
+          }[];
+        }
+      >(`/tv/${id}`),
+      tmdb<{
+        cast: { id: number; name: string; character: string | null; profile_path: string | null }[];
+        crew: {
           id: number;
-          season_number: number;
-          name?: string;
-          episode_count?: number;
-          poster_path?: string | null;
-          overview?: string;
-          air_date?: string | null;
+          name: string;
+          job: string | null;
+          department: string | null;
+          profile_path: string | null;
         }[];
-      }
-    >(`/tv/${id}`),
-    tmdb<{
-      cast: { id: number; name: string; character: string | null; profile_path: string | null }[];
-      crew: {
-        id: number;
-        name: string;
-        job: string | null;
-        department: string | null;
-        profile_path: string | null;
-      }[];
-    }>(`/tv/${id}/credits`).catch(() => ({
-      cast: [],
-      crew: [],
-    })),
-    tmdb<{ results: Show[] }>(`/tv/${id}/recommendations`).catch(() => ({
-      results: [],
-    })),
-    tmdb<{
-      results: { key: string; site: string; type: string; official?: boolean }[];
-    }>(`/tv/${id}/videos`).catch(() => ({ results: [] })),
-  ]);
-
-  const trailer =
-    videos.results.find(
-      (v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"),
-    ) || videos.results.find((v) => v.site === "YouTube");
-
-  const isMovie = show.media_type === "movie" || (!show.first_air_date && !!show.release_date);
-  const runtime = show.episode_run_time?.[0] ?? null;
-
-  return {
-    id: show.id,
-    title: show.name || show.title || "Untitled",
-    originalTitle: show.original_name || show.original_title || "",
-    overview: show.overview || "No synopsis available.",
-    poster: show.poster_path ?? null,
-    backdrop: show.backdrop_path ?? show.poster_path ?? null,
-    rating: Math.round((show.vote_average ?? 0) * 10) / 10,
-    voteAverage: show.vote_average ?? 0,
-    voteCount: show.vote_count ?? 0,
-    firstAirDate: show.first_air_date || show.release_date || "",
-    lastAirDate: show.last_air_date,
-    numberOfSeasons: show.number_of_seasons ?? 1,
-    numberOfEpisodes: show.number_of_episodes ?? 0,
-    language: show.original_language?.toUpperCase() || "JA",
-    popularity: show.popularity ?? 0,
-    runtime,
-    countries: show.production_countries?.map((c) => c.name) || show.origin_country || ["Japan"],
-    companies: show.production_companies || [],
-    status: show.status || (isMovie ? "Released" : "Ended"),
-    genres: (show.genres || []).map((g) => g.name),
-    seasons: (show.seasons || [])
-      .filter((s) => s.season_number > 0)
-      .map((s) => ({
-        id: s.id,
-        seasonNumber: s.season_number,
-        name: s.name || `Season ${s.season_number}`,
-        episodeCount: s.episode_count ?? 0,
-        poster: s.poster_path ?? null,
-        overview: s.overview || "",
-        airDate: s.air_date ?? null,
+      }>(`/tv/${id}/credits`).catch(() => ({
+        cast: [],
+        crew: [],
       })),
-    cast: (credits.cast || []).slice(0, 12).map((c) => ({
-      id: c.id,
-      name: c.name,
-      character: c.character,
-      profile: c.profile_path,
-    })),
-    crew: (credits.crew || []).slice(0, 8).map((c) => ({
-      id: c.id,
-      name: c.name,
-      job: c.job,
-      department: c.department,
-      profile: c.profile_path,
-    })),
-    recommendations: (recs.results || []).filter(isAnime).slice(0, 12).map(toCard),
-    trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
-  };
+      tmdb<{ results: Show[] }>(`/tv/${id}/recommendations`).catch(() => ({
+        results: [],
+      })),
+      tmdb<{
+        results: { key: string; site: string; type: string; official?: boolean }[];
+      }>(`/tv/${id}/videos`).catch(() => ({ results: [] })),
+    ]);
+
+    const trailer =
+      videos.results.find(
+        (v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"),
+      ) || videos.results.find((v) => v.site === "YouTube");
+
+    const runtime = show.episode_run_time?.[0] ?? null;
+
+    return {
+      id: show.id,
+      title: show.name || show.title || "Untitled",
+      originalTitle: show.original_name || show.original_title || "",
+      overview: show.overview || "No synopsis available.",
+      poster: show.poster_path ?? null,
+      backdrop: show.backdrop_path ?? show.poster_path ?? null,
+      rating: Math.round((show.vote_average ?? 0) * 10) / 10,
+      voteAverage: show.vote_average ?? 0,
+      voteCount: show.vote_count ?? 0,
+      firstAirDate: show.first_air_date || show.release_date || "",
+      lastAirDate: show.last_air_date,
+      numberOfSeasons: show.number_of_seasons ?? 1,
+      numberOfEpisodes: show.number_of_episodes ?? 0,
+      language: show.original_language?.toUpperCase() || "JA",
+      popularity: show.popularity ?? 0,
+      runtime,
+      countries: show.production_countries?.map((c) => c.name) || show.origin_country || ["Japan"],
+      companies: show.production_companies || [],
+      status: show.status || "Ended",
+      genres: (show.genres || []).map((g) => g.name),
+      seasons: (show.seasons || [])
+        .filter((s) => s.season_number > 0)
+        .map((s) => ({
+          id: s.id,
+          seasonNumber: s.season_number,
+          name: s.name || `Season ${s.season_number}`,
+          episodeCount: s.episode_count ?? 0,
+          poster: s.poster_path ?? null,
+          overview: s.overview || "",
+          airDate: s.air_date ?? null,
+        })),
+      cast: (credits.cast || []).slice(0, 12).map((c) => ({
+        id: c.id,
+        name: c.name,
+        character: c.character,
+        profile: c.profile_path,
+      })),
+      crew: (credits.crew || []).slice(0, 8).map((c) => ({
+        id: c.id,
+        name: c.name,
+        job: c.job,
+        department: c.department,
+        profile: c.profile_path,
+      })),
+      recommendations: (recs.results || []).filter(isAnime).slice(0, 12).map(toCard),
+      trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
+    };
+  } catch {
+    // Second attempt: Movie endpoint (for Anime Movies like Your Name, Suzume, Mugen Train, etc.)
+    const [movie, credits, recs, videos] = await Promise.all([
+      tmdb<
+        Show & {
+          release_date?: string;
+          runtime?: number | null;
+          production_countries?: { iso_3166_1: string; name: string }[];
+          production_companies?: { id: number; name: string }[];
+          genres?: { id: number; name: string }[];
+        }
+      >(`/movie/${id}`),
+      tmdb<{
+        cast: { id: number; name: string; character: string | null; profile_path: string | null }[];
+        crew: {
+          id: number;
+          name: string;
+          job: string | null;
+          department: string | null;
+          profile_path: string | null;
+        }[];
+      }>(`/movie/${id}/credits`).catch(() => ({
+        cast: [],
+        crew: [],
+      })),
+      tmdb<{ results: Show[] }>(`/movie/${id}/recommendations`).catch(() => ({
+        results: [],
+      })),
+      tmdb<{
+        results: { key: string; site: string; type: string; official?: boolean }[];
+      }>(`/movie/${id}/videos`).catch(() => ({ results: [] })),
+    ]);
+
+    const trailer =
+      videos.results.find(
+        (v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"),
+      ) || videos.results.find((v) => v.site === "YouTube");
+
+    const movieTitle = movie.title || movie.name || "Movie";
+
+    return {
+      id: movie.id,
+      title: movieTitle,
+      originalTitle: movie.original_title || movie.original_name || movieTitle,
+      overview: movie.overview || "No synopsis available.",
+      poster: movie.poster_path ?? null,
+      backdrop: movie.backdrop_path ?? movie.poster_path ?? null,
+      rating: Math.round((movie.vote_average ?? 0) * 10) / 10,
+      voteAverage: movie.vote_average ?? 0,
+      voteCount: movie.vote_count ?? 0,
+      firstAirDate: movie.release_date || "",
+      lastAirDate: movie.release_date,
+      numberOfSeasons: 1,
+      numberOfEpisodes: 1,
+      language: movie.original_language?.toUpperCase() || "JA",
+      popularity: movie.popularity ?? 0,
+      runtime: movie.runtime ?? null,
+      countries: movie.production_countries?.map((c) => c.name) || ["Japan"],
+      companies: movie.production_companies || [],
+      status: movie.status || "Released",
+      genres: (movie.genres || []).map((g) => g.name),
+      seasons: [
+        {
+          id: movie.id,
+          seasonNumber: 1,
+          name: "Movie",
+          episodeCount: 1,
+          poster: movie.poster_path ?? null,
+          overview: movie.overview || "",
+          airDate: movie.release_date ?? null,
+        },
+      ],
+      cast: (credits.cast || []).slice(0, 12).map((c) => ({
+        id: c.id,
+        name: c.name,
+        character: c.character,
+        profile: c.profile_path,
+      })),
+      crew: (credits.crew || []).slice(0, 8).map((c) => ({
+        id: c.id,
+        name: c.name,
+        job: c.job,
+        department: c.department,
+        profile: c.profile_path,
+      })),
+      recommendations: (recs.results || []).slice(0, 12).map(toCard),
+      trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
+    };
+  }
 }
 
 export async function season(id: number, seasonNumber: number): Promise<SeasonDetails> {
-  const data = await tmdb<{
-    id: number;
-    season_number: number;
-    name: string;
-    overview: string;
-    poster_path: string | null;
-    air_date: string | null;
-    episodes: {
+  try {
+    const data = await tmdb<{
       id: number;
-      episode_number: number;
+      season_number: number;
       name: string;
       overview: string;
-      still_path: string | null;
+      poster_path: string | null;
       air_date: string | null;
-      vote_average: number;
-      runtime: number | null;
-    }[];
-  }>(`/tv/${id}/season/${seasonNumber}`);
+      episodes: {
+        id: number;
+        episode_number: number;
+        name: string;
+        overview: string;
+        still_path: string | null;
+        air_date: string | null;
+        vote_average: number;
+        runtime: number | null;
+      }[];
+    }>(`/tv/${id}/season/${seasonNumber}`);
 
-  return {
-    id: data.id,
-    seasonNumber: data.season_number,
-    name: data.name || `Season ${data.season_number}`,
-    overview: data.overview || "",
-    poster: data.poster_path ?? null,
-    airDate: data.air_date ?? null,
-    episodes: (data.episodes || []).map((e) => ({
-      id: e.id,
-      episodeNumber: e.episode_number,
-      seasonNumber,
-      name: e.name || `Episode ${e.episode_number}`,
-      overview: e.overview || "",
-      still: e.still_path ?? null,
-      airDate: e.air_date ?? null,
-      voteAverage: Math.round((e.vote_average ?? 0) * 10) / 10,
-      runtime: e.runtime ?? null,
-    })),
-  };
+    return {
+      id: data.id,
+      seasonNumber: data.season_number,
+      name: data.name || `Season ${data.season_number}`,
+      overview: data.overview || "",
+      poster: data.poster_path ?? null,
+      airDate: data.air_date ?? null,
+      episodes: (data.episodes || []).map((e) => ({
+        id: e.id,
+        episodeNumber: e.episode_number,
+        seasonNumber,
+        name: e.name || `Episode ${e.episode_number}`,
+        overview: e.overview || "",
+        still: e.still_path ?? null,
+        airDate: e.air_date ?? null,
+        voteAverage: Math.round((e.vote_average ?? 0) * 10) / 10,
+        runtime: e.runtime ?? null,
+      })),
+    };
+  } catch {
+    // If TV season fails, fallback to Movie endpoint
+    const movie = await tmdb<{
+      id: number;
+      title?: string;
+      name?: string;
+      overview?: string;
+      poster_path?: string | null;
+      backdrop_path?: string | null;
+      release_date?: string | null;
+      vote_average?: number;
+      runtime?: number | null;
+    }>(`/movie/${id}`);
+
+    return {
+      id: movie.id,
+      seasonNumber: 1,
+      name: "Movie",
+      overview: movie.overview || "",
+      poster: movie.poster_path ?? null,
+      airDate: movie.release_date ?? null,
+      episodes: [
+        {
+          id: movie.id,
+          episodeNumber: 1,
+          seasonNumber: 1,
+          name: movie.title || movie.name || "Full Movie",
+          overview: movie.overview || "",
+          still: movie.backdrop_path ?? movie.poster_path ?? null,
+          airDate: movie.release_date ?? null,
+          voteAverage: Math.round((movie.vote_average ?? 0) * 10) / 10,
+          runtime: movie.runtime ?? null,
+        },
+      ],
+    };
+  }
 }
 
 export async function keywordId(keyword: string): Promise<number | null> {

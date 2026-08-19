@@ -1,12 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 
 import { fetchSeason, fetchShow } from "@/lib/anime.functions";
 import { useWatchlist } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
-import { getEpisodeId, fetchSeasonEpisodesConfig } from "@/lib/episodes.firebase";
+import {
+  getEpisodeId,
+  fetchSeasonEpisodesConfig,
+  fetchAnimeConfiguredEpisodes,
+} from "@/lib/episodes.firebase";
 import { checkAdminSession } from "@/lib/admin-auth";
+import { animateCardStagger } from "@/lib/anime-animation";
 
 import {
   IconAlert,
@@ -21,7 +26,6 @@ import {
   IconStar,
 } from "./icons";
 import { Img, img } from "./media";
-import { Row } from "./row";
 import { ErrorState } from "./states";
 import { ComingSoonModal } from "./coming-soon-modal";
 
@@ -31,6 +35,7 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null);
   const [comingSoonEpisode, setComingSoonEpisode] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const epGridRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setIsAdmin(checkAdminSession());
@@ -43,24 +48,53 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
     retry: 1,
   });
 
+  // Fetch all configured episodes for this anime to know available seasons & episodes
+  const { data: animeConfiguredEpisodes } = useQuery({
+    queryKey: ["anime-configured-episodes", id],
+    queryFn: () => fetchAnimeConfiguredEpisodes(id),
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Set of season numbers that have at least 1 configured live episode
+  const configuredSeasonNumbers = useMemo(() => {
+    const set = new Set<number>();
+    (animeConfiguredEpisodes ?? []).forEach((ep) => {
+      if (ep.season && (ep.server1?.url || ep.server2?.url)) {
+        set.add(Number(ep.season));
+      }
+    });
+    return set;
+  }, [animeConfiguredEpisodes]);
+
+  // Filter seasons: Only show seasons that have at least 1 live episode (or all for admin)
+  const allSeasons = (data?.seasons ?? []).filter(
+    (s) => s.seasonNumber > 0 && s.episodeCount > 0 && !s.name?.toLowerCase().includes("special"),
+  );
+
+  const availableSeasons = useMemo(() => {
+    const filtered = allSeasons.filter((s) => configuredSeasonNumbers.has(s.seasonNumber));
+    return filtered.length > 0 ? filtered : allSeasons.slice(0, 1);
+  }, [allSeasons, configuredSeasonNumbers]);
+
+  const activeSeason =
+    seasonNumber ??
+    (configuredSeasonNumbers.size > 0
+      ? Array.from(configuredSeasonNumbers)[0]
+      : (allSeasons[0]?.seasonNumber ?? 1));
+
   useEffect(() => {
     setSeasonNumber(null);
   }, [id]);
 
-  const seasons = (data?.seasons ?? []).filter(
-    (s) => s.seasonNumber > 0 && s.episodeCount > 0 && !s.name?.toLowerCase().includes("special"),
-  );
-  const activeSeason = seasonNumber ?? seasons[0]?.seasonNumber ?? 1;
-
   useEffect(() => {
-    if (autoPlay && data) {
+    if (autoPlay && data && configuredSeasonNumbers.size > 0) {
       void router.navigate({
         to: "/anime/$id/watch",
         params: { id: String(data.id) },
         search: { season: Number(activeSeason) || 1, episode: 1 },
       });
     }
-  }, [autoPlay, data, activeSeason, router]);
+  }, [autoPlay, data, activeSeason, router, configuredSeasonNumbers]);
 
   const seasonQuery = useQuery({
     queryKey: ["season", id, activeSeason],
@@ -75,6 +109,29 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
     enabled: activeSeason !== null,
     staleTime: 1000 * 60 * 2,
   });
+
+  // Filter episodes: ONLY show episodes that have live streaming links added
+  const visibleEpisodes = useMemo(() => {
+    const rawEpisodes = seasonQuery.data?.episodes ?? [];
+
+    const filtered = rawEpisodes.filter((ep) => {
+      const epId = getEpisodeId(id, activeSeason as number, ep.episodeNumber);
+      const epDoc = seasonFirebaseMap?.get(epId);
+      return Boolean(epDoc?.server1?.url || epDoc?.server2?.url);
+    });
+
+    return filtered;
+  }, [seasonQuery.data?.episodes, seasonFirebaseMap, id, activeSeason]);
+
+  // Anime.js stagger animation when episodes load
+  useEffect(() => {
+    if (epGridRef.current && visibleEpisodes.length > 0) {
+      const cards = epGridRef.current.querySelectorAll<HTMLElement>(".ep-card");
+      if (cards.length > 0) {
+        animateCardStagger(Array.from(cards));
+      }
+    }
+  }, [visibleEpisodes, activeSeason]);
 
   if (isError) {
     return (
@@ -119,16 +176,10 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
   };
 
   const handleWatchNow = () => {
-    const firstAvailable = seasonQuery.data?.episodes?.find((ep) => {
-      const epId = getEpisodeId(data.id, activeSeason as number, ep.episodeNumber);
-      const epDoc = seasonFirebaseMap?.get(epId);
-      return Boolean(epDoc?.server1?.url || epDoc?.server2?.url);
-    });
-
-    if (firstAvailable) {
-      handleEpisodeClick(firstAvailable.episodeNumber);
+    if (visibleEpisodes.length > 0) {
+      handleEpisodeClick(visibleEpisodes[0].episodeNumber);
     } else {
-      handleEpisodeClick(1);
+      setComingSoonEpisode(1);
     }
   };
 
@@ -153,7 +204,7 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
           <Img
             src={img(data.poster, "w500")}
             alt={data.title}
-            className="w-28 shrink-0 shadow-2xl ring-1 ring-white/15 md:w-52"
+            className="w-28 shrink-0 shadow-2xl ring-1 ring-white/15 md:w-52 anime-glow-card"
             rounded="rounded-2xl"
           />
 
@@ -256,7 +307,10 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
           </div>
 
           <dl className="grid grid-cols-2 gap-3 rounded-2xl bg-[#0D111C]/80 border border-white/[0.08] backdrop-blur-xl p-4 sm:p-5 text-xs">
-            <Info label="Seasons" value={String(data.numberOfSeasons || seasons.length || "—")} />
+            <Info
+              label="Seasons"
+              value={String(data.numberOfSeasons || allSeasons.length || "—")}
+            />
             <Info label="Episodes" value={String(data.numberOfEpisodes || "—")} />
             <Info label="First aired" value={data.firstAirDate || "—"} />
             <Info label="Last aired" value={data.lastAirDate || "—"} />
@@ -284,28 +338,28 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
       </div>
 
       {/* Seasons & Episodes */}
-      {seasons.length > 0 && activeSeason !== null && (
+      {availableSeasons.length > 0 && activeSeason !== null && (
         <section className="mx-auto mt-8 max-w-[1600px] px-4 md:px-8">
           <div className="rounded-2xl bg-[#0D111C]/80 border border-white/[0.08] backdrop-blur-xl p-4 sm:p-6 space-y-4">
             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-b border-white/[0.06] pb-3">
               <div>
-                <h2 className="text-sm sm:text-base font-bold text-white">Seasons & Episodes</h2>
+                <h2 className="text-sm sm:text-base font-bold text-white">Live Episodes</h2>
                 <p className="text-[11px] text-[#94a3b8]">
                   Select an episode to watch on high-speed servers.
                 </p>
               </div>
 
-              {seasons.length > 1 && (
+              {availableSeasons.length > 1 && (
                 <div className="scrollbar-none flex gap-1.5 overflow-x-auto pb-1">
-                  {seasons.map((s) => (
+                  {availableSeasons.map((s) => (
                     <button
                       key={s.id}
                       onClick={() => setSeasonNumber(s.seasonNumber)}
                       className={cn(
-                        "rounded-lg px-3 py-1 text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer active:scale-95",
+                        "rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer active:scale-95",
                         s.seasonNumber === activeSeason
-                          ? "bg-[#6366f1] text-white shadow-sm shadow-[#6366f1]/30"
-                          : "bg-white/[0.04] text-[#94a3b8] hover:text-white",
+                          ? "bg-[#6366f1] text-white shadow-md shadow-[#6366f1]/30"
+                          : "bg-white/[0.04] text-[#94a3b8] hover:text-white hover:bg-white/10",
                       )}
                     >
                       {s.name}
@@ -315,7 +369,7 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
               )}
             </div>
 
-            <div key={activeSeason} className="fade-up overflow-hidden">
+            <div key={activeSeason} className="overflow-hidden">
               {seasonQuery.isPending ? (
                 <SeasonSkeleton />
               ) : seasonQuery.isError ? (
@@ -323,68 +377,78 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                   message="This season's details couldn't be loaded."
                   onRetry={() => void seasonQuery.refetch()}
                 />
+              ) : visibleEpisodes.length === 0 ? (
+                <div className="py-12 text-center text-xs text-[#94a3b8] space-y-2">
+                  <p>Stream links for this season are being prepared.</p>
+                  {isAdmin && (
+                    <Link
+                      to="/data/admin"
+                      search={{ animeId: id, season: Number(activeSeason) || 1 }}
+                      className="inline-block rounded-xl bg-[#6366f1] px-4 py-2 text-xs font-bold text-white hover:bg-[#4f46e5]"
+                    >
+                      Add Links in Admin Panel →
+                    </Link>
+                  )}
+                </div>
               ) : (
-                seasonQuery.data && (
-                  <div className="space-y-4 overflow-hidden">
-                    <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                      {seasonQuery.data.episodes.map((ep) => {
-                        const epId = getEpisodeId(
-                          data.id,
-                          activeSeason as number,
-                          ep.episodeNumber,
-                        );
-                        const epDoc = seasonFirebaseMap?.get(epId);
-                        const hasStream = Boolean(epDoc?.server1?.url || epDoc?.server2?.url);
+                <div
+                  ref={epGridRef}
+                  className="grid gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                  {visibleEpisodes.map((ep) => {
+                    const epId = getEpisodeId(data.id, activeSeason as number, ep.episodeNumber);
+                    const epDoc = seasonFirebaseMap?.get(epId);
+                    const hasStream = Boolean(epDoc?.server1?.url || epDoc?.server2?.url);
 
-                        return (
-                          <button
-                            key={ep.id}
-                            type="button"
-                            onClick={() => handleEpisodeClick(ep.episodeNumber)}
-                            className="group flex w-full min-w-0 max-w-full items-start gap-2.5 rounded-xl bg-[#111622]/70 border border-white/[0.06] p-2 text-left transition-all hover:border-white/15 hover:bg-[#151b2a] cursor-pointer active:scale-[0.98] backdrop-blur-md overflow-hidden"
-                          >
-                            <div className="relative aspect-video w-20 sm:w-24 shrink-0 overflow-hidden rounded-lg bg-black/60">
-                              <Img
-                                src={img(ep.still, "w300")}
-                                alt={ep.name || `Episode ${ep.episodeNumber}`}
-                                className="h-full w-full object-cover"
-                                rounded="rounded-lg"
-                              />
-                              <div className="absolute top-1 left-1 rounded bg-black/70 px-1 py-0.2 text-[9px] font-bold text-white">
-                                EP {ep.episodeNumber}
-                              </div>
-                            </div>
-                            <div className="min-w-0 flex-1 py-0.5 flex flex-col justify-between h-full overflow-hidden">
-                              <div className="min-w-0 overflow-hidden">
-                                <p className="truncate text-xs font-semibold text-[#f1f5f9] group-hover:text-[#818cf8] transition break-words">
-                                  {ep.name || `Episode ${ep.episodeNumber}`}
-                                </p>
-                                <p className="line-clamp-2 mt-0.5 text-[10px] text-[#94a3b8] break-words leading-tight">
-                                  {ep.overview || "No synopsis available."}
-                                </p>
-                              </div>
-                              <div className="mt-1 flex items-center justify-between text-[10px] min-w-0 pt-0.5">
-                                {hasStream ? (
-                                  <span className="text-emerald-400 font-semibold flex items-center gap-1 shrink-0">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_#34d399]" />
-                                    Ready
-                                  </span>
-                                ) : (
-                                  <span className="text-neutral-500 font-medium shrink-0">
-                                    No Stream
-                                  </span>
-                                )}
-                                {ep.runtime && (
-                                  <span className="text-[#94a3b8] shrink-0">{ep.runtime}m</span>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )
+                    return (
+                      <button
+                        key={ep.id}
+                        type="button"
+                        onClick={() => handleEpisodeClick(ep.episodeNumber)}
+                        className="ep-card group flex w-full min-w-0 max-w-full items-start gap-2.5 rounded-2xl bg-[#111622]/70 border border-white/[0.06] p-2.5 text-left transition-all duration-250 hover:border-[#818cf8]/40 hover:bg-[#151b2a] cursor-pointer active:scale-[0.98] backdrop-blur-md overflow-hidden hover:shadow-[0_8px_20px_rgba(99,102,241,0.15)]"
+                      >
+                        <div className="relative aspect-video w-20 sm:w-24 shrink-0 overflow-hidden rounded-xl bg-black/60">
+                          <Img
+                            src={img(ep.still || data.poster, "w300")}
+                            alt={ep.name || `Episode ${ep.episodeNumber}`}
+                            className="h-full w-full object-cover group-hover:scale-105 transition duration-300"
+                            rounded="rounded-xl"
+                          />
+                          <div className="absolute top-1 left-1 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-black text-white">
+                            EP {ep.episodeNumber}
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1 py-0.5 flex flex-col justify-between h-full overflow-hidden">
+                          <div className="min-w-0 overflow-hidden">
+                            <p className="truncate text-xs font-bold text-[#f1f5f9] group-hover:text-[#818cf8] transition break-words">
+                              {ep.name || `Episode ${ep.episodeNumber}`}
+                            </p>
+                            <p className="line-clamp-2 mt-0.5 text-[10px] text-[#94a3b8] break-words leading-tight">
+                              {ep.overview || "No synopsis available."}
+                            </p>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between text-[10px] min-w-0 pt-0.5">
+                            {hasStream ? (
+                              <span className="text-emerald-400 font-bold flex items-center gap-1 shrink-0">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+                                Live Stream
+                              </span>
+                            ) : (
+                              <span className="text-neutral-500 font-medium shrink-0">
+                                No Stream
+                              </span>
+                            )}
+                            {ep.runtime && (
+                              <span className="text-[#94a3b8] shrink-0 font-medium">
+                                {ep.runtime}m
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -403,12 +467,6 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
             sub: [c.job, c.department].filter(Boolean).join(" · "),
           }))}
         />
-      )}
-
-      {data.recommendations.length > 0 && (
-        <div className="mt-6">
-          <Row title="More Like This" items={data.recommendations} />
-        </div>
       )}
 
       {comingSoonEpisode !== null && (

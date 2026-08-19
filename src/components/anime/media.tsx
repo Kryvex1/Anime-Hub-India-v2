@@ -5,9 +5,10 @@ import { IconProfile } from "./icons";
 const IMG = "https://image.tmdb.org/t/p/";
 
 export function img(path: string | null | undefined, size = "w500") {
-  if (!path) return null;
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (!path || typeof path !== "string" || !path.trim()) return null;
+  const trimmed = path.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   return `${IMG}${size}${cleanPath}`;
 }
 
@@ -29,7 +30,8 @@ export function Img({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const hasImage = Boolean(src && !failed);
+  const cleanSrc = typeof src === "string" && src.trim().length > 0 ? src.trim() : null;
+  const hasImage = Boolean(cleanSrc && !failed);
 
   return (
     <div className={cn("relative overflow-hidden bg-[#0e1320]", rounded, className)}>
@@ -38,9 +40,9 @@ export function Img({
         <div className={cn("absolute inset-0 shimmer bg-white/[0.04]", rounded)} />
       )}
 
-      {hasImage ? (
+      {hasImage && cleanSrc ? (
         <img
-          src={src!}
+          src={cleanSrc}
           alt={alt}
           loading="lazy"
           decoding="async"

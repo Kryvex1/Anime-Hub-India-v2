@@ -1,11 +1,103 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap");
+
+/* JioHotstar Soul Fonts */
+@font-face {
+  font-family: "Hotstar Sans";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src:
+    url("https://www.hotstar.com/assets-x/mweb/assets-ui-lib/fonts/soul-icons.5b8891f13ba59d392e2f.woff2")
+      format("woff2"),
+    url("https://www.hotstar.com/assets-x/mweb/assets-ui-lib/fonts/soul-icons.c3a53582f6e5e58586d1.woff")
+      format("woff");
+}
+
+@font-face {
+  font-family: "Hotstar Icons";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src:
+    url("https://www.hotstar.com/assets-x/mweb/assets-ui-lib/fonts/soul-icons.5b8891f13ba59d392e2f.woff2")
+      format("woff2"),
+    url("https://www.hotstar.com/assets-x/mweb/assets-ui-lib/fonts/soul-icons.c3a53582f6e5e58586d1.woff")
+      format("woff");
+}
+
+/* Official Netflix Sans Web Fonts */
+@font-face {
+  font-family: "Netflix Sans";
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://assets.nflxext.com/ffe/siteui/fonts/netflix-sans/v3/NetflixSans_W_Rg.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Netflix Sans";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://assets.nflxext.com/ffe/siteui/fonts/netflix-sans/v3/NetflixSans_W_Rg.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Netflix Sans";
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://assets.nflxext.com/ffe/siteui/fonts/netflix-sans/v3/NetflixSans_W_Md.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Netflix Sans";
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://assets.nflxext.com/ffe/siteui/fonts/netflix-sans/v3/NetflixSans_W_Md.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Netflix Sans";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://assets.nflxext.com/ffe/siteui/fonts/netflix-sans/v3/NetflixSans_W_Bd.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Netflix Sans";
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://assets.nflxext.com/ffe/siteui/fonts/netflix-sans/v3/NetflixSans_W_Bd.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Netflix Sans";
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://assets.nflxext.com/ffe/siteui/fonts/netflix-sans/v3/NetflixSans_W_Bd.woff2")
+    format("woff2");
+}
 
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans:
+    "Plus Jakarta Sans", "Hotstar Sans", "Netflix Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --color-brand: #6366f1;
   --color-brand-glow: #818cf8;
   --color-surface: #0d111c;
@@ -99,10 +191,10 @@
   transition-property:
     color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 250ms;
+  transition-duration: 220ms;
 }
 
-/* Global Dynamic Theme Overrides - Transforms all brand elements across the app immediately */
+/* Global Dynamic Theme Overrides */
 .bg-\[\#6366f1\],
 .bg-indigo-600,
 .bg-indigo-500 {
@@ -172,11 +264,13 @@
     background-color: #070a12;
     color: #f8fafc;
     font-family:
-      "Inter",
+      "Netflix Sans",
       -apple-system,
       BlinkMacSystemFont,
       "Segoe UI",
       Roboto,
+      "Helvetica Neue",
+      Arial,
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -250,6 +344,18 @@
   animation: zoom-in-soft 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.anime-glow-card {
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, box-shadow;
+}
+
+.anime-glow-card:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow:
+    0 15px 35px -10px rgba(99, 102, 241, 0.45),
+    0 0 20px 2px rgba(129, 140, 248, 0.2);
+}
+
 @keyframes shimmer-slide {
   0% {
     background-position: 180% 0;
@@ -295,22 +401,22 @@
 @keyframes modal-scale-in {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.92) translateY(8px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
 @keyframes modal-scale-out {
   from {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
   to {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.92) translateY(8px);
   }
 }
 
@@ -321,8 +427,20 @@
     border-color: rgba(99, 102, 241, 0.35);
   }
   50% {
-    box-shadow: 0 0 35px rgba(99, 102, 241, 0.5);
-    border-color: rgba(99, 102, 241, 0.7);
+    box-shadow:
+      0 0 40px rgba(99, 102, 241, 0.55),
+      0 0 15px rgba(129, 140, 248, 0.4);
+    border-color: rgba(99, 102, 241, 0.75);
+  }
+}
+
+@keyframes floatSmooth {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
   }
 }
 
@@ -330,8 +448,12 @@
   animation: pulseGlow 2.2s infinite ease-in-out;
 }
 
+.animate-float {
+  animation: floatSmooth 4s infinite ease-in-out;
+}
+
 .animate-modal-in {
-  animation: modal-scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: modal-scale-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-modal-out {

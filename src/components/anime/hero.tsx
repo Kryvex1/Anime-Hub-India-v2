@@ -61,18 +61,22 @@ export function Hero({ items }: { items: CardItem[] }) {
   return (
     <>
       <section className="relative h-[76vh] min-h-[520px] w-full overflow-hidden md:h-[86vh]">
-        {items.map((it, i) => (
-          <img
-            key={it.id}
-            src={img(it.backdrop, "original") ?? ""}
-            alt=""
-            aria-hidden={i !== index}
-            className={cn(
-              "absolute inset-0 h-full w-full object-cover transition-all duration-[1400ms] ease-out",
-              i === index ? "scale-100 opacity-100" : "scale-105 opacity-0",
-            )}
-          />
-        ))}
+        {items.map((it, i) => {
+          const bgUrl = img(it.backdrop || it.poster, "original");
+          if (!bgUrl) return null;
+          return (
+            <img
+              key={it.id}
+              src={bgUrl}
+              alt=""
+              aria-hidden={i !== index}
+              className={cn(
+                "absolute inset-0 h-full w-full object-cover transition-all duration-[1400ms] ease-out",
+                i === index ? "scale-100 opacity-100" : "scale-105 opacity-0",
+              )}
+            />
+          );
+        })}
 
         <div className="absolute inset-0 bg-gradient-to-t from-[#070A12] via-[#070A12]/70 to-[#070A12]/10" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#070A12] via-[#070A12]/60 to-transparent" />

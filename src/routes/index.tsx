@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 
+import { IconPlay } from "@/components/anime/icons";
 import { Hero, HeroSkeleton } from "@/components/anime/hero";
 import { Row } from "@/components/anime/row";
 import { ErrorState } from "@/components/anime/states";
@@ -15,13 +16,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Anime Hub India: Discover trending, popular, top-rated anime and genre picks with fast multi-server streaming.",
+          "Anime Hub India: Discover trending, popular, and top-rated anime with fast multi-server streaming.",
       },
       { property: "og:title", content: "Anime Hub India — Watch & Discover Anime" },
       {
         property: "og:description",
         content:
-          "Anime Hub India: Discover trending, popular, top-rated anime and genre picks with fast multi-server streaming.",
+          "Anime Hub India: Discover trending, popular, and top-rated anime with fast multi-server streaming.",
       },
     ],
   }),
@@ -54,7 +55,7 @@ function Index() {
     return (
       <>
         <HeroSkeleton />
-        <div className="-mt-16 relative z-10">
+        <div className="-mt-16 relative z-10 space-y-4">
           <Row title="Trending Now" items={[]} loading />
           <Row title="Popular Anime" items={[]} loading />
         </div>
@@ -62,15 +63,53 @@ function Index() {
     );
   }
 
+  const hasConfiguredAnime = Boolean(data.totalConfigured > 0);
+
+  if (!hasConfiguredAnime) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-20 text-center space-y-6">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-[#6366f1]/10 border border-[#6366f1]/30 text-[#818cf8] shadow-xl shadow-[#6366f1]/10 animate-bounce">
+          <IconPlay width={32} height={32} />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+            No Stream Links Added Yet
+          </h1>
+          <p className="text-sm text-[#94a3b8] max-w-md mx-auto">
+            Anime Hub India displays only stream-ready anime. Go to the Admin Panel to configure
+            video links for your favorite anime series.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <Link
+            to="/data/admin"
+            className="rounded-2xl bg-[#6366f1] px-6 py-3 text-xs sm:text-sm font-bold text-white hover:bg-[#4f46e5] transition shadow-lg shadow-[#6366f1]/30"
+          >
+            Open Admin Panel to Add Links
+          </Link>
+          <Link
+            to="/browse"
+            className="rounded-2xl bg-white/[0.06] border border-white/10 px-6 py-3 text-xs sm:text-sm font-bold text-white hover:bg-white/10 transition"
+          >
+            Browse Catalog
+          </Link>
+        </div>
+        <div className="pt-8">
+          <TelegramBanner />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <Hero items={data.hero} />
-      <div className="relative z-10 -mt-20 space-y-2 md:-mt-28">
+      {data.hero && data.hero.length > 0 && <Hero items={data.hero} />}
+
+      <div className="relative z-10 -mt-20 space-y-4 md:-mt-28 md:space-y-6">
         {data.trending && data.trending.length > 0 && (
           <Row
             title="Trending Now"
             items={data.trending}
-            ranked
             action={
               <Link to="/trending" className="text-xs font-semibold text-primary hover:underline">
                 See all
@@ -78,6 +117,7 @@ function Index() {
             }
           />
         )}
+
         {data.popular && data.popular.length > 0 && (
           <Row
             title="Popular Anime"
@@ -89,36 +129,31 @@ function Index() {
             }
           />
         )}
-        {data.topRated && data.topRated.length > 0 && (
-          <Row title="Top Rated" items={data.topRated} />
+
+        {data.actionAdventure && data.actionAdventure.length > 0 && (
+          <Row title="Action & Adventure" items={data.actionAdventure} />
         )}
+
+        {data.fantasySupernatural && data.fantasySupernatural.length > 0 && (
+          <Row title="Fantasy & Supernatural" items={data.fantasySupernatural} />
+        )}
+
+        {data.movies && data.movies.length > 0 && (
+          <Row title="Blockbuster Movies" items={data.movies} />
+        )}
+
+        {data.romanceDrama && data.romanceDrama.length > 0 && (
+          <Row title="Romance & Drama" items={data.romanceDrama} />
+        )}
+
+        {data.topRated && data.topRated.length > 0 && (
+          <Row title="Top Rated Masterpieces" items={data.topRated} />
+        )}
+
         {data.latest && data.latest.length > 0 && (
           <Row title="Recently Added" items={data.latest} />
         )}
-        {data.recommended && data.recommended.length > 0 && (
-          <Row title="Recommended For You" items={data.recommended} />
-        )}
-        {data.genreRows &&
-          data.genreRows.map(
-            (row) =>
-              row.items &&
-              row.items.length > 0 && (
-                <Row
-                  key={row.slug}
-                  title={row.name}
-                  items={row.items}
-                  action={
-                    <Link
-                      to="/genres/$slug"
-                      params={{ slug: row.slug }}
-                      className="text-xs font-semibold text-primary hover:underline"
-                    >
-                      See all
-                    </Link>
-                  }
-                />
-              ),
-          )}
+
         <div className="pt-4 sm:pt-6">
           <TelegramBanner />
         </div>

@@ -9,7 +9,6 @@ export function Row({
   title,
   items,
   loading,
-  ranked,
   action,
 }: {
   title: string;
@@ -23,29 +22,31 @@ export function Row({
   const scrollBy = (dir: 1 | -1) => {
     const el = ref.current;
     if (!el) return;
-    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.85), behavior: "smooth" });
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.75), behavior: "smooth" });
   };
 
   if (!loading && items.length === 0) return null;
 
   return (
-    <section className="fade-up py-4">
-      <div className="mb-3 flex items-center justify-between gap-3 px-4 md:px-8">
-        <h2 className="text-lg font-bold tracking-tight md:text-xl">{title}</h2>
+    <section className="fade-up py-2.5 sm:py-3.5">
+      <div className="mb-2 sm:mb-2.5 flex items-center justify-between gap-3 px-4 md:px-8">
+        <h2 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-white">
+          {title}
+        </h2>
         <div className="flex items-center gap-2">
           {action}
           <div className="hidden gap-1.5 md:flex">
             <button
               onClick={() => scrollBy(-1)}
               aria-label={`Scroll ${title} left`}
-              className="glass rounded-full p-1.5 text-foreground/80 transition hover:scale-110 hover:text-primary"
+              className="rounded-full bg-white/[0.06] border border-white/10 p-1.5 text-white/80 transition hover:scale-105 hover:bg-white/15 hover:text-white cursor-pointer active:scale-95"
             >
               <IconChevronLeft width={18} height={18} />
             </button>
             <button
               onClick={() => scrollBy(1)}
               aria-label={`Scroll ${title} right`}
-              className="glass rounded-full p-1.5 text-foreground/80 transition hover:scale-110 hover:text-primary"
+              className="rounded-full bg-white/[0.06] border border-white/10 p-1.5 text-white/80 transition hover:scale-105 hover:bg-white/15 hover:text-white cursor-pointer active:scale-95"
             >
               <IconChevronRight width={18} height={18} />
             </button>
@@ -55,44 +56,53 @@ export function Row({
 
       <div
         ref={ref}
-        className="scrollbar-none flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:gap-4 md:px-8"
+        className="scrollbar-none flex snap-x snap-mandatory gap-2.5 sm:gap-3.5 overflow-x-auto px-4 pb-2 md:gap-4 md:px-8 items-start"
       >
-        {(loading ? Array.from({ length: 8 }) : items).map((item, i) => (
-          <div
-            key={loading ? i : (item as CardItem).id}
-            className="w-[38vw] shrink-0 snap-start sm:w-[26vw] md:w-[20vw] lg:w-[15vw] xl:w-[12.5vw]"
-          >
-            {loading ? (
-              <CardSkeleton />
-            ) : (
-              <AnimeCard item={item as CardItem} rank={ranked ? i + 1 : undefined} />
-            )}
-          </div>
-        ))}
+        {(loading ? Array.from({ length: 7 }) : items).map((item, i) => {
+          if (loading) {
+            return (
+              <div
+                key={i}
+                className="w-[34vw] shrink-0 snap-start sm:w-[24vw] md:w-[18vw] lg:w-[14vw] xl:w-[12vw]"
+              >
+                <CardSkeleton />
+              </div>
+            );
+          }
+
+          const cardItem = item as CardItem;
+          return (
+            <div
+              key={cardItem.id}
+              className="w-[34vw] shrink-0 snap-start sm:w-[24vw] md:w-[18vw] lg:w-[14vw] xl:w-[12vw]"
+            >
+              <AnimeCard item={cardItem} />
+            </div>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-export function Grid({
-  items,
-  loading,
-  skeletonCount = 18,
-  ranked,
-}: {
-  items: CardItem[];
-  loading?: boolean;
-  skeletonCount?: number;
-  ranked?: boolean;
-}) {
+export function Grid({ items, loading }: { items: CardItem[]; loading?: boolean }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <CardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
+
+  if (items.length === 0) return null;
+
   return (
-    <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 xl:gap-x-4">
-      {items.map((item, i) => (
-        <AnimeCard key={`${item.id}-${i}`} item={item} rank={ranked ? i + 1 : undefined} />
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      {items.map((item) => (
+        <AnimeCard key={item.id} item={item} />
       ))}
-      {loading
-        ? Array.from({ length: skeletonCount }).map((_, i) => <CardSkeleton key={`s-${i}`} />)
-        : null}
     </div>
   );
 }

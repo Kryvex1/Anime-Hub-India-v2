@@ -220,7 +220,7 @@ export function EpisodeEditor({
                 onClick={handlePasteClipboard}
                 className="text-[11px] font-semibold text-[#818cf8] hover:text-white transition cursor-pointer"
               >
-                📋 Paste from Clipboard
+                Paste from Clipboard
               </button>
             </div>
 
@@ -331,7 +331,7 @@ export function EpisodeEditor({
                 className="rounded-xl bg-[#6366f1] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#4f46e5] transition shadow-lg shadow-[#6366f1]/30 active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
                 <IconSparkles width={14} height={14} />
-                {saving ? "Saving..." : "⚡ Save Stream"}
+                {saving ? "Saving..." : "Save Stream"}
               </button>
             </div>
           </div>

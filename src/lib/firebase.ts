@@ -1,37 +1,17 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import {
-  initializeFirestore,
-  getFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from "firebase/firestore";
+import { getDatabase } from "firebase/database";
+import { getFirestore } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
-// Initialize Firebase
+// Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+// Authentication
 export const auth = getAuth(app);
 
-const databaseId =
-  firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)"
-    ? firebaseConfig.firestoreDatabaseId
-    : undefined;
+// Lightning-Fast Firebase Realtime Database
+export const rtdb = getDatabase(app);
 
-function createFirestore() {
-  try {
-    return initializeFirestore(
-      app,
-      {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager(),
-        }),
-        experimentalAutoDetectLongPolling: true,
-      },
-      databaseId,
-    );
-  } catch {
-    return databaseId ? getFirestore(app, databaseId) : getFirestore(app);
-  }
-}
-
-export const db = createFirestore();
+// Firestore (for fallback/compatibility)
+export const db = getFirestore(app);
