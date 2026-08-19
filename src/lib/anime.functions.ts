@@ -215,12 +215,21 @@ export async function getLatest(page = 1) {
 }
 
 export async function getSearch(
-  q: string,
+  q: unknown,
   page = 1,
   signal?: AbortSignal,
   options?: { bypassFilter?: boolean },
 ) {
-  const query = q.trim();
+  let query = "";
+  if (typeof q === "string") {
+    query = q.trim();
+  } else if (q && typeof q === "object") {
+    const d = (q as Record<string, unknown>).data || q;
+    query = String(
+      (d as Record<string, unknown>).q || (d as Record<string, unknown>).query || "",
+    ).trim();
+  }
+
   if (!query) return { page: 1, totalPages: 0, items: [] as CardItem[] };
 
   if (options?.bypassFilter) {
@@ -367,8 +376,40 @@ export async function fetchByGenre(genreSlug: string, page = 1) {
   return paginateCards(matched, page, 20);
 }
 
-export async function fetchSearch(query: string, page = 1, options?: { bypassFilter?: boolean }) {
-  return getSearch(query, page, undefined, options);
+export async function fetchSearch(
+  queryOrArgs:
+    | string
+    | {
+        data?: {
+          q?: string;
+          query?: string;
+          page?: number;
+          signal?: AbortSignal;
+          bypassFilter?: boolean;
+        };
+        page?: number;
+        bypassFilter?: boolean;
+      },
+  page = 1,
+  options?: { bypassFilter?: boolean },
+) {
+  let qStr = "";
+  let pNum = page;
+  let sig: AbortSignal | undefined;
+  let bypass = options?.bypassFilter;
+
+  if (typeof queryOrArgs === "string") {
+    qStr = queryOrArgs;
+  } else if (queryOrArgs && typeof queryOrArgs === "object") {
+    const raw = queryOrArgs as Record<string, unknown>;
+    const d = (raw.data as Record<string, unknown> | undefined) || raw;
+    qStr = String(d.q || d.query || "");
+    if (typeof d.page === "number") pNum = d.page;
+    if (d.signal instanceof AbortSignal) sig = d.signal;
+    if (d.bypassFilter !== undefined) bypass = Boolean(d.bypassFilter);
+  }
+
+  return getSearch(qStr, pNum, sig, { bypassFilter: bypass });
 }
 
 export async function fetchTrending(args?: { data?: { page?: number } }) {
