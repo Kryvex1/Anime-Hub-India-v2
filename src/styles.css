@@ -1,0 +1,339 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-brand: #6366f1;
+  --color-brand-glow: #818cf8;
+  --color-surface: #0d111c;
+  --color-surface-2: #111622;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: #070a12;
+  --foreground: #f8fafc;
+  --card: #0d111c;
+  --card-foreground: #f8fafc;
+  --popover: #0d111c;
+  --popover-foreground: #f8fafc;
+  --brand-primary: #6366f1;
+  --brand-glow: #818cf8;
+  --brand-hover: #4f46e5;
+  --brand-rgb: 99, 102, 241;
+  --brand-gradient: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  --primary: var(--brand-primary);
+  --primary-foreground: #ffffff;
+  --secondary: #111622;
+  --secondary-foreground: #f8fafc;
+  --muted: #151c2c;
+  --muted-foreground: #94a3b8;
+  --accent: var(--brand-glow);
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: var(--brand-primary);
+}
+
+.dark {
+  --background: #070a12;
+  --foreground: #f8fafc;
+  --card: #0d111c;
+  --card-foreground: #f8fafc;
+  --popover: #0d111c;
+  --popover-foreground: #f8fafc;
+  --primary: var(--brand-primary);
+  --primary-foreground: #ffffff;
+  --secondary: #111622;
+  --secondary-foreground: #f8fafc;
+  --muted: #151c2c;
+  --muted-foreground: #94a3b8;
+  --accent: var(--brand-glow);
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: var(--brand-primary);
+}
+
+/* Universal Smooth Color Fade Transition */
+*,
+::before,
+::after {
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 250ms;
+}
+
+/* Global Dynamic Theme Overrides - Transforms all brand elements across the app immediately */
+.bg-\[\#6366f1\],
+.bg-indigo-600,
+.bg-indigo-500 {
+  background-color: var(--brand-primary) !important;
+}
+
+.hover\:bg-\[\#4f46e5\]:hover,
+.hover\:bg-indigo-500:hover,
+.hover\:bg-indigo-600:hover {
+  background-color: var(--brand-hover) !important;
+}
+
+.text-\[\#6366f1\],
+.text-\[\#818cf8\],
+.text-indigo-400,
+.text-indigo-300 {
+  color: var(--brand-glow) !important;
+}
+
+.border-\[\#6366f1\],
+.border-indigo-500,
+.border-indigo-500\/20,
+.border-indigo-500\/25,
+.border-indigo-500\/30,
+.border-indigo-500\/40,
+.border-indigo-500\/50 {
+  border-color: var(--brand-primary) !important;
+}
+
+.ring-indigo-500,
+.ring-indigo-500\/50 {
+  --tw-ring-color: var(--brand-primary) !important;
+}
+
+.shadow-\[\#6366f1\]\/30,
+.shadow-\[\#6366f1\]\/40,
+.shadow-\[\#6366f1\]\/50,
+.shadow-indigo-500\/20,
+.shadow-indigo-500\/25,
+.shadow-indigo-600\/25 {
+  --tw-shadow-color: rgba(var(--brand-rgb), 0.35) !important;
+}
+
+.from-\[\#6366f1\],
+.from-indigo-600,
+.from-indigo-500 {
+  --tw-gradient-from: var(--brand-primary) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(var(--brand-rgb), 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position)) !important;
+}
+
+.to-\[\#818cf8\],
+.to-indigo-400 {
+  --tw-gradient-to: var(--brand-glow) var(--tw-gradient-to-position) !important;
+}
+
+.bg-gradient-brand {
+  background: var(--brand-gradient) !important;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: #070a12;
+    color: #f8fafc;
+    font-family:
+      "Inter",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Roboto,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: #070a12;
+  }
+
+  ::selection {
+    background: #6366f1;
+    color: #ffffff;
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility glass {
+  background: rgba(13, 17, 28, 0.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility glass-ios {
+  background: rgba(17, 22, 34, 0.65);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+@utility glass-pill {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility shimmer {
+  background: linear-gradient(
+    100deg,
+    rgba(17, 22, 34, 0.6) 30%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(17, 22, 34, 0.6) 70%
+  );
+  background-size: 300% 100%;
+  animation: shimmer-slide 1.4s ease-in-out infinite;
+}
+
+@utility text-gradient {
+  background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility zoom-in-soft {
+  animation: zoom-in-soft 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes shimmer-slide {
+  0% {
+    background-position: 180% 0;
+  }
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-out-down {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes zoom-in-soft {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes modal-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes modal-scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.25);
+    border-color: rgba(99, 102, 241, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(99, 102, 241, 0.5);
+    border-color: rgba(99, 102, 241, 0.7);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.2s infinite ease-in-out;
+}
+
+.animate-modal-in {
+  animation: modal-scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-out {
+  animation: modal-scale-out 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

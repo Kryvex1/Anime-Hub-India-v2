@@ -1,0 +1,5 @@
+{
+  "name": "CineAnime Hub",
+  "description": "Anime discovery hub and multi-server streaming player with Firebase-authenticated admin control center.",
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
