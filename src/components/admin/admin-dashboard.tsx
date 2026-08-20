@@ -138,6 +138,7 @@ export function AdminDashboard({
     id: number;
     title: string;
     poster: string | null;
+    isMovie?: boolean;
     seasons: { id: number; seasonNumber: number; name: string; episodeCount: number }[];
   } | null>(null);
 
@@ -364,10 +365,19 @@ export function AdminDashboard({
               },
             ];
 
+      const isShowMovie = Boolean(
+        details.isMovie ||
+        details.type === "movie" ||
+        details.numberOfEpisodes === 1 ||
+        (details.seasons?.length === 1 &&
+          details.seasons[0]?.name?.toLowerCase().includes("movie")),
+      );
+
       setSelectedAnime({
         id: details.id,
         title: details.title,
         poster: details.poster,
+        isMovie: isShowMovie,
         seasons,
       });
 
@@ -1139,6 +1149,16 @@ export function AdminDashboard({
                         <h2 className="text-base sm:text-lg font-bold text-white truncate">
                           {selectedAnime.title}
                         </h2>
+                        {Boolean(
+                          selectedAnime.isMovie ||
+                          (selectedAnime.seasons.length === 1 &&
+                            (selectedAnime.seasons[0]?.name?.toLowerCase().includes("movie") ||
+                              selectedAnime.seasons[0]?.episodeCount === 1)),
+                        ) && (
+                          <span className="rounded-md bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-black text-emerald-400 shrink-0 uppercase">
+                            Movie
+                          </span>
+                        )}
                         <Link
                           to="/anime/$id"
                           params={{ id: String(selectedAnime.id) }}
@@ -1148,7 +1168,12 @@ export function AdminDashboard({
                         </Link>
                       </div>
                       <p className="text-xs text-[#94a3b8] truncate mt-0.5">
-                        Season {selectedSeasonNumber || 1} · {seasonEpisodes.length} Episodes Total
+                        {selectedAnime.isMovie ||
+                        (selectedAnime.seasons.length === 1 &&
+                          (selectedAnime.seasons[0]?.name?.toLowerCase().includes("movie") ||
+                            selectedAnime.seasons[0]?.episodeCount === 1))
+                          ? "Anime Movie • Full Length Feature Link Setup"
+                          : `Season ${selectedSeasonNumber || 1} · ${seasonEpisodes.length} Episodes Total`}
                       </p>
                     </div>
                   </div>
@@ -1174,36 +1199,45 @@ export function AdminDashboard({
                       )}
                     </button>
 
-                    {/* Bulk Paste Quick Trigger Button */}
-                    <button
-                      type="button"
-                      onClick={() => setBulkModalOpen(true)}
-                      className="rounded-xl bg-[#6366f1]/20 border border-[#6366f1]/40 px-3.5 py-2 text-xs font-bold text-[#a5b4fc] hover:bg-[#6366f1] hover:text-white transition flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
-                    >
-                      <IconSparkles width={14} height={14} /> Bulk Paste Links
-                    </button>
+                    {/* Bulk Paste Quick Trigger Button (Hidden for movies) */}
+                    {!(
+                      selectedAnime.isMovie ||
+                      (selectedAnime.seasons.length === 1 &&
+                        (selectedAnime.seasons[0]?.name?.toLowerCase().includes("movie") ||
+                          selectedAnime.seasons[0]?.episodeCount === 1))
+                    ) && (
+                      <button
+                        type="button"
+                        onClick={() => setBulkModalOpen(true)}
+                        className="rounded-xl bg-[#6366f1]/20 border border-[#6366f1]/40 px-3.5 py-2 text-xs font-bold text-[#a5b4fc] hover:bg-[#6366f1] hover:text-white transition flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
+                      >
+                        <IconSparkles width={14} height={14} /> Bulk Paste Links
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Season Pills Tabs */}
-                <div className="w-full min-w-0 overflow-hidden">
-                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1.5 w-full">
-                    {selectedAnime.seasons.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => handleSelectSeason(s.seasonNumber)}
-                        className={`rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition cursor-pointer shrink-0 active:scale-95 ${
-                          selectedSeasonNumber === s.seasonNumber
-                            ? "bg-[#6366f1] text-white shadow-md shadow-[#6366f1]/30"
-                            : "bg-white/[0.04] text-[#94a3b8] hover:text-white hover:bg-white/10"
-                        }`}
-                      >
-                        {s.name} ({s.episodeCount} eps)
-                      </button>
-                    ))}
+                {/* Season Pills Tabs (Only if multiple seasons) */}
+                {selectedAnime.seasons.length > 1 && (
+                  <div className="w-full min-w-0 overflow-hidden">
+                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1.5 w-full">
+                      {selectedAnime.seasons.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => handleSelectSeason(s.seasonNumber)}
+                          className={`rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition cursor-pointer shrink-0 active:scale-95 ${
+                            selectedSeasonNumber === s.seasonNumber
+                              ? "bg-[#6366f1] text-white shadow-md shadow-[#6366f1]/30"
+                              : "bg-white/[0.04] text-[#94a3b8] hover:text-white hover:bg-white/10"
+                          }`}
+                        >
+                          {s.name} ({s.episodeCount} eps)
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* EPISODE BOXES GRID: S01 E01, S01 E02, ... */}
                 {loadingSeason ? (
@@ -1225,10 +1259,16 @@ export function AdminDashboard({
                     className="grid gap-3.5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 w-full"
                   >
                     {seasonEpisodes.map((ep, idx) => {
+                      const isMovie = Boolean(
+                        selectedAnime.isMovie ||
+                        (selectedAnime.seasons.length === 1 &&
+                          (selectedAnime.seasons[0]?.name?.toLowerCase().includes("movie") ||
+                            selectedAnime.seasons[0]?.episodeCount === 1)),
+                      );
                       const seasonNum = selectedSeasonNumber || 1;
                       const sFormatted = String(seasonNum).padStart(2, "0");
                       const eFormatted = String(ep.episodeNumber).padStart(2, "0");
-                      const boxBadge = `S${sFormatted} E${eFormatted}`;
+                      const boxBadge = isMovie ? "MOVIE STREAM" : `S${sFormatted} E${eFormatted}`;
 
                       const epId = getEpisodeId(selectedAnime.id, seasonNum, ep.episodeNumber);
                       const epConfig = seasonFirebaseMap.get(epId);
@@ -1577,39 +1617,57 @@ export function AdminDashboard({
               </div>
             ) : (
               <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
-                {filteredActiveLinks.map((ep) => (
-                  <div
-                    key={ep.id}
-                    className="rounded-2xl border border-white/10 bg-[#0e1320] p-3 flex items-center justify-between gap-2.5 w-full min-w-0 overflow-hidden hover:border-white/20 transition"
-                  >
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <div className="flex items-center gap-1.5">
-                        <span className="rounded bg-[#6366f1]/20 px-1.5 py-0.5 text-[9px] font-black text-[#818cf8] shrink-0">
-                          S{ep.season} E{ep.episode}
-                        </span>
-                        <p className="text-xs font-bold text-white truncate">{ep.animeTitle}</p>
-                      </div>
-                      <p className="text-[10px] text-[#94a3b8] truncate mt-1">
-                        {ep.episodeTitle || `Episode ${ep.episode}`}
-                      </p>
-                      <p className="text-[9px] text-[#64748b] truncate mt-0.5 font-mono">
-                        {ep.server1?.url || ep.server2?.url}
-                      </p>
-                    </div>
+                {filteredActiveLinks.map((ep) => {
+                  const isMovie = Boolean(
+                    ep.isMovie ||
+                    (ep.season === 1 &&
+                      ep.episode === 1 &&
+                      (ep.episodeTitle?.toLowerCase().includes("movie") ||
+                        ep.animeTitle?.toLowerCase().includes("movie"))),
+                  );
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Link
-                        to="/anime/$id/watch"
-                        params={{ id: String(ep.animeId) }}
-                        search={{ season: ep.season, episode: ep.episode }}
-                        className="p-2 rounded-xl bg-white/[0.05] text-[#818cf8] hover:bg-[#6366f1] hover:text-white transition"
-                        title="Watch Stream"
-                      >
-                        <IconPlay width={14} height={14} />
-                      </Link>
+                  return (
+                    <div
+                      key={ep.id}
+                      className="rounded-2xl border border-white/10 bg-[#0e1320] p-3 flex items-center justify-between gap-2.5 w-full min-w-0 overflow-hidden hover:border-white/20 transition"
+                    >
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[9px] font-black shrink-0 ${
+                              isMovie
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                : "bg-[#6366f1]/20 text-[#818cf8]"
+                            }`}
+                          >
+                            {isMovie ? "MOVIE" : `S${ep.season} E${ep.episode}`}
+                          </span>
+                          <p className="text-xs font-bold text-white truncate">{ep.animeTitle}</p>
+                        </div>
+                        <p className="text-[10px] text-[#94a3b8] truncate mt-1">
+                          {isMovie
+                            ? "Full Movie Feature"
+                            : ep.episodeTitle || `Episode ${ep.episode}`}
+                        </p>
+                        <p className="text-[9px] text-[#64748b] truncate mt-0.5 font-mono">
+                          {ep.server1?.url || ep.server2?.url}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Link
+                          to="/anime/$id/watch"
+                          params={{ id: String(ep.animeId) }}
+                          search={{ season: ep.season, episode: ep.episode }}
+                          className="p-2 rounded-xl bg-white/[0.05] text-[#818cf8] hover:bg-[#6366f1] hover:text-white transition"
+                          title="Watch Stream"
+                        >
+                          <IconPlay width={14} height={14} />
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1726,6 +1784,12 @@ export function AdminDashboard({
             seasonNumber={selectedSeasonNumber}
             episode={activeEditingEpisode}
             existingConfig={activeExistingConfig}
+            isMovie={Boolean(
+              selectedAnime.isMovie ||
+              (selectedAnime.seasons.length === 1 &&
+                (selectedAnime.seasons[0]?.name?.toLowerCase().includes("movie") ||
+                  selectedAnime.seasons[0]?.episodeCount === 1)),
+            )}
             onClose={() => setEditingEpisodeIndex(null)}
             onSaved={() => {
               void loadSeasonData(selectedAnime.id, selectedSeasonNumber);

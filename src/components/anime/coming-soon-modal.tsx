@@ -7,13 +7,14 @@ export interface ComingSoonModalProps {
   isOpen: boolean;
   onClose: () => void;
   animeTitle: string;
-  animeId: number;
+  animeId?: number;
   seasonNumber?: number;
   episodeNumber?: number;
   episodeTitle?: string;
   posterPath?: string | null;
   backdropPath?: string | null;
   isAdmin?: boolean;
+  isMovie?: boolean;
 }
 
 export function ComingSoonModal({
@@ -27,6 +28,7 @@ export function ComingSoonModal({
   posterPath,
   backdropPath,
   isAdmin = false,
+  isMovie = false,
 }: ComingSoonModalProps) {
   const [requested, setRequested] = useState(false);
 
@@ -82,7 +84,7 @@ export function ComingSoonModal({
             <X className="w-4 h-4" />
           </button>
 
-          {/* Floating Episode / Coming Soon Tag */}
+          {/* Floating Tag */}
           <div className="absolute bottom-2 left-4 flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 px-2.5 py-0.5 text-[10px] font-bold text-indigo-300 backdrop-blur-md">
               <Clock
@@ -92,7 +94,7 @@ export function ComingSoonModal({
               COMING SOON
             </span>
             <span className="rounded-full bg-white/10 border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-slate-300 backdrop-blur-md">
-              S{seasonNumber} · EP{episodeNumber}
+              {isMovie ? "Full Movie" : `S${seasonNumber} · EP${episodeNumber}`}
             </span>
           </div>
         </div>
@@ -105,8 +107,9 @@ export function ComingSoonModal({
               <p className="text-[11px] font-medium text-indigo-300/90 truncate">{episodeTitle}</p>
             )}
             <p className="text-xs text-slate-400 leading-relaxed pt-0.5">
-              We are sorry! This episode has not been uploaded to the stream servers yet. It will be
-              available shortly.
+              {isMovie
+                ? "This anime movie has not been uploaded to the stream servers yet. It will be available shortly."
+                : "We are sorry! This episode has not been uploaded to the stream servers yet. It will be available shortly."}
             </p>
           </div>
 
@@ -135,7 +138,7 @@ export function ComingSoonModal({
               )}
             </button>
 
-            {isAdmin && (
+            {isAdmin && animeId && (
               <Link
                 to="/data/admin"
                 search={{ animeId, season: seasonNumber, episode: episodeNumber }}

@@ -122,8 +122,20 @@ export async function fetchCardItemsByIds(ids: number[]): Promise<CardItem[]> {
   return items.filter((i): i is CardItem => i !== null);
 }
 
+// In-memory cache for configured cards for instant page navigation
+let cachedConfiguredCards: { at: number; cards: CardItem[] } | null = null;
+
+export function invalidateConfiguredCardsCache() {
+  cachedConfiguredCards = null;
+}
+
 // Fetch all configured anime card items with full poster self-healing
-export async function getConfiguredAnimeCards(): Promise<CardItem[]> {
+export async function getConfiguredAnimeCards(force = false): Promise<CardItem[]> {
+  const now = Date.now();
+  if (!force && cachedConfiguredCards && now - cachedConfiguredCards.at < 1000 * 20) {
+    return cachedConfiguredCards.cards;
+  }
+
   const addedList = await fetchAddedAnimeList();
   const cardMap = new Map<number, CardItem>();
   const needsTmdbFetch: number[] = [];
@@ -153,7 +165,9 @@ export async function getConfiguredAnimeCards(): Promise<CardItem[]> {
     fetchedCards.forEach((c) => cardMap.set(c.id, c));
   }
 
-  return Array.from(cardMap.values());
+  const result = Array.from(cardMap.values());
+  cachedConfiguredCards = { at: now, cards: result };
+  return result;
 }
 
 // Pagination helper for an in-memory array of CardItems

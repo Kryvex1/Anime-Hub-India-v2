@@ -76,6 +76,8 @@ export type SeasonDetails = {
 
 export type ShowDetails = {
   id: number;
+  type?: "tv" | "movie";
+  isMovie?: boolean;
   title: string;
   originalTitle: string;
   overview: string;
@@ -803,6 +805,8 @@ export async function details(id: number): Promise<ShowDetails> {
 
     return {
       id: show.id,
+      type: "tv",
+      isMovie: false,
       title: show.name || show.title || "Untitled",
       originalTitle: show.original_name || show.original_title || "",
       overview: show.overview || "No synopsis available.",
@@ -891,6 +895,8 @@ export async function details(id: number): Promise<ShowDetails> {
 
     return {
       id: movie.id,
+      type: "movie",
+      isMovie: true,
       title: movieTitle,
       originalTitle: movie.original_title || movie.original_name || movieTitle,
       overview: movie.overview || "No synopsis available.",

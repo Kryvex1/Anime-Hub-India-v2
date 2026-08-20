@@ -358,13 +358,48 @@ export async function fetchAddedAnimeList(): Promise<AddedAnimeDoc[]> {
    EPISODE MANAGEMENT (Realtime Database /episodes)
    ========================================================= */
 
+let cachedEpisodesMap: { at: number; map: Map<string, EpisodeDoc> } | null = null;
+
+export function invalidateEpisodeCache() {
+  cachedEpisodesMap = null;
+}
+
+export async function fetchAllEpisodesMap(force = false): Promise<Map<string, EpisodeDoc>> {
+  const now = Date.now();
+  if (!force && cachedEpisodesMap && now - cachedEpisodesMap.at < 1000 * 30) {
+    return cachedEpisodesMap.map;
+  }
+  const map = new Map<string, EpisodeDoc>();
+  try {
+    const allEpRef = ref(rtdb, "episodes");
+    const snap = await get(allEpRef);
+    if (snap.exists()) {
+      const all = snap.val() as Record<string, EpisodeDoc>;
+      Object.entries(all).forEach(([key, val]) => {
+        map.set(key, val);
+      });
+    }
+    cachedEpisodesMap = { at: now, map };
+  } catch (err) {
+    console.error("Error fetching all episodes map from RTDB:", err);
+    if (cachedEpisodesMap) return cachedEpisodesMap.map;
+  }
+  return map;
+}
+
 export async function fetchEpisodeConfig(episodeId: string): Promise<EpisodeDoc | null> {
   if (!episodeId) return null;
+  const allMap = await fetchAllEpisodesMap();
+  const cached = allMap.get(episodeId);
+  if (cached) return cached;
+
   try {
     const epRef = ref(rtdb, `episodes/${episodeId}`);
     const snap = await get(epRef);
     if (snap.exists()) {
-      return snap.val() as EpisodeDoc;
+      const data = snap.val() as EpisodeDoc;
+      allMap.set(episodeId, data);
+      return data;
     }
     return null;
   } catch (err) {
@@ -378,23 +413,14 @@ export async function fetchSeasonEpisodesConfig(
   seasonNumber: number,
 ): Promise<Map<string, EpisodeDoc>> {
   const map = new Map<string, EpisodeDoc>();
-  try {
-    const allEpRef = ref(rtdb, "episodes");
-    const snap = await get(allEpRef);
-    if (snap.exists()) {
-      const all = snap.val() as Record<string, EpisodeDoc>;
-      Object.entries(all).forEach(([key, val]) => {
-        if (
-          Number(val.animeId) === Number(animeId) &&
-          Number(val.season) === Number(seasonNumber)
-        ) {
-          map.set(key, val);
-        }
-      });
+  const allMap = await fetchAllEpisodesMap();
+
+  allMap.forEach((val, key) => {
+    if (Number(val.animeId) === Number(animeId) && Number(val.season) === Number(seasonNumber)) {
+      map.set(key, val);
     }
-  } catch (err) {
-    console.error("Error fetching season episode configs from RTDB:", err);
-  }
+  });
+
   return map;
 }
 
@@ -571,12 +597,14 @@ export async function saveEpisodeConfig(
   }
 
   invalidateConfiguredAnimeCache();
+  invalidateEpisodeCache();
 }
 
 export async function deleteEpisodeConfig(episodeId: string): Promise<void> {
   const epRef = ref(rtdb, `episodes/${episodeId}`);
   await remove(epRef);
   invalidateConfiguredAnimeCache();
+  invalidateEpisodeCache();
 }
 
 export async function deleteServerFromEpisode(episodeId: string, serverNum: 1 | 2): Promise<void> {
@@ -595,24 +623,23 @@ export async function deleteServerFromEpisode(episodeId: string, serverNum: 1 | 
     });
   }
   invalidateConfiguredAnimeCache();
+  invalidateEpisodeCache();
 }
 
 export async function fetchAnimeConfiguredEpisodes(animeId: number): Promise<EpisodeDoc[]> {
-  try {
-    const epRef = ref(rtdb, "episodes");
-    const snap = await get(epRef);
-    if (!snap.exists()) return [];
+  const allMap = await fetchAllEpisodesMap();
+  const list: EpisodeDoc[] = [];
 
-    const all = snap.val() as Record<string, EpisodeDoc>;
-    return Object.values(all).filter(
-      (ep) =>
-        Number(ep.animeId) === Number(animeId) &&
-        Boolean(ep.server1?.url?.trim() || ep.server2?.url?.trim()),
-    );
-  } catch (err) {
-    console.error("Error fetching anime configured episodes from RTDB:", err);
-    return [];
-  }
+  allMap.forEach((ep) => {
+    if (
+      Number(ep.animeId) === Number(animeId) &&
+      Boolean(ep.server1?.url?.trim() || ep.server2?.url?.trim())
+    ) {
+      list.push(ep);
+    }
+  });
+
+  return list;
 }
 
 export async function fetchAllConfiguredEpisodes(): Promise<EpisodeDoc[]> {

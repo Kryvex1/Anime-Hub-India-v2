@@ -5,6 +5,7 @@ import type { CardItem } from "@/lib/tmdb";
 import { cn } from "@/lib/utils";
 import { fetchSeasonEpisodesConfig, getEpisodeId } from "@/lib/episodes.firebase";
 import { checkAdminSession } from "@/lib/admin-auth";
+import { useConfiguredAnime } from "@/lib/configured-anime-context";
 
 import { IconInfo, IconPlay, IconStar } from "./icons";
 import { img } from "./media";
@@ -15,6 +16,7 @@ export function Hero({ items }: { items: CardItem[] }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [checking, setChecking] = useState(false);
   const [modalItem, setModalItem] = useState<CardItem | null>(null);
+  const { hasLink } = useConfiguredAnime();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -83,10 +85,7 @@ export function Hero({ items }: { items: CardItem[] }) {
 
         <div className="relative z-10 mx-auto flex h-full max-w-[1600px] items-end px-4 pb-20 md:px-8 md:pb-28">
           <div key={item.id} className="fade-up max-w-2xl">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#6366f1]/15 px-3 py-1 text-[11px] font-semibold tracking-[0.16em] text-[#818cf8] uppercase ring-1 ring-[#6366f1]/30">
-              Featured anime
-            </span>
-            <h1 className="mt-3 text-3xl leading-[1.05] font-extrabold tracking-tight md:text-6xl text-white">
+            <h1 className="text-3xl leading-[1.05] font-extrabold tracking-tight md:text-6xl text-white">
               {item.title}
             </h1>
             {item.originalTitle && item.originalTitle !== item.title && (
@@ -110,14 +109,16 @@ export function Hero({ items }: { items: CardItem[] }) {
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                disabled={checking}
-                onClick={() => void handleHeroWatchNow(item)}
-                className="flex items-center gap-2 rounded-full bg-[#6366f1] px-6 py-3 text-sm font-bold text-white shadow-[0_16px_40px_-16px_rgba(99,102,241,0.5)] transition-all hover:bg-[#4f46e5] active:scale-95 cursor-pointer disabled:opacity-50"
-              >
-                <IconPlay width={16} height={16} /> {checking ? "Checking..." : "Watch Now"}
-              </button>
+              {hasLink(item.id) && (
+                <button
+                  type="button"
+                  disabled={checking}
+                  onClick={() => void handleHeroWatchNow(item)}
+                  className="flex items-center gap-2 rounded-full bg-[#6366f1] px-6 py-3 text-sm font-bold text-white shadow-[0_16px_40px_-16px_rgba(99,102,241,0.5)] transition-all hover:bg-[#4f46e5] active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  <IconPlay width={16} height={16} /> {checking ? "Checking..." : "Watch Now"}
+                </button>
+              )}
               <Link
                 to="/anime/$id"
                 params={{ id: String(item.id) }}

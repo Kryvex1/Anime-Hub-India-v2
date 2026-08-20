@@ -4,6 +4,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { IconPlay } from "@/components/anime/icons";
 import { Hero, HeroSkeleton } from "@/components/anime/hero";
 import { Row } from "@/components/anime/row";
+import { ContinueWatchingRow } from "@/components/anime/continue-watching-row";
 import { ErrorState } from "@/components/anime/states";
 import { TelegramBanner } from "@/components/anime/telegram-banner";
 import { fetchHome } from "@/lib/anime.functions";
@@ -106,6 +107,8 @@ function Index() {
       {data.hero && data.hero.length > 0 && <Hero items={data.hero} />}
 
       <div className="relative z-10 -mt-20 space-y-4 md:-mt-28 md:space-y-6">
+        <ContinueWatchingRow />
+
         {data.trending && data.trending.length > 0 && (
           <Row
             title="Trending Now"

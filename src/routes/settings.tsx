@@ -168,31 +168,34 @@ function SettingsPage() {
         </div>
       </section>
 
-      {/* 2. PLAYBACK PREFERENCES */}
+      {/* 2. PLAYBACK & STREAMING PREFERENCES */}
       <section className="space-y-4 pt-2">
         <div className="flex items-center gap-2 text-white font-bold text-base sm:text-lg">
           <Zap className="w-5 h-5 text-[var(--brand-glow)]" />
-          <h2>Playback Options</h2>
+          <h2>Playback & Stream Settings</h2>
         </div>
 
-        <div className="group relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[#0b0f19]/90 border border-white/[0.07] hover:border-white/15 transition-all duration-300 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center justify-between gap-3.5 sm:gap-4">
-            <div className="min-w-0 flex-1 space-y-1">
-              <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                Auto-Play Next Episode
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                Automatically transition to the next episode when watching multi-episode seasons.
-              </p>
-            </div>
+        <div className="space-y-3">
+          {/* Auto-Play Next Episode */}
+          <div className="group relative overflow-hidden p-4 sm:p-5 rounded-2xl bg-[#0b0f19]/90 border border-white/[0.07] hover:border-white/15 transition-all duration-300 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between gap-3.5 sm:gap-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                  Auto-Play Next Episode
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                  Automatically transition to the next episode when watching multi-episode seasons.
+                </p>
+              </div>
 
-            <div className="shrink-0">
-              <Switch
-                checked={settings.autoPlayNext}
-                onChange={(val) => {
-                  updateSetting("autoPlayNext", val);
-                }}
-              />
+              <div className="shrink-0">
+                <Switch
+                  checked={settings.autoPlayNext}
+                  onChange={(val) => {
+                    updateSetting("autoPlayNext", val);
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>

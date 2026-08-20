@@ -21,6 +21,7 @@ import {
 interface EpisodeEditorProps {
   anime: { id: number; title: string; poster: string | null };
   seasonNumber: number;
+  isMovie?: boolean;
   episode: {
     id: number;
     episodeNumber: number;
@@ -39,6 +40,7 @@ interface EpisodeEditorProps {
 export function EpisodeEditor({
   anime,
   seasonNumber,
+  isMovie,
   episode,
   existingConfig,
   onClose,
@@ -164,13 +166,19 @@ export function EpisodeEditor({
             />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="rounded-md bg-[#6366f1]/20 px-2 py-0.5 text-[10px] font-black text-[#818cf8] border border-[#6366f1]/30">
-                  S{seasonNumber} : EP {episode.episodeNumber}
-                </span>
+                {isMovie ? (
+                  <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black text-emerald-400 border border-emerald-500/30">
+                    ANIME MOVIE
+                  </span>
+                ) : (
+                  <span className="rounded-md bg-[#6366f1]/20 px-2 py-0.5 text-[10px] font-black text-[#818cf8] border border-[#6366f1]/30">
+                    S{seasonNumber} : EP {episode.episodeNumber}
+                  </span>
+                )}
                 <span className="text-xs text-[#94a3b8] font-medium truncate">{anime.title}</span>
               </div>
               <h2 className="text-sm sm:text-base font-bold text-white truncate mt-0.5">
-                {episode.name || `Episode ${episode.episodeNumber}`}
+                {isMovie ? "Full Movie Stream" : episode.name || `Episode ${episode.episodeNumber}`}
               </h2>
             </div>
           </div>
@@ -184,8 +192,8 @@ export function EpisodeEditor({
           </button>
         </div>
 
-        {/* Quick Episode Navigation */}
-        {onNavigateEpisode && (
+        {/* Quick Episode Navigation (TV Shows Only) */}
+        {!isMovie && onNavigateEpisode && (
           <div className="flex items-center justify-between py-2.5 text-xs text-[#94a3b8] border-b border-white/[0.06]">
             <button
               type="button"
@@ -213,7 +221,7 @@ export function EpisodeEditor({
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-white flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Stream Link / Embed URL:
+                Stream Link (Reign / MAIN):
               </label>
               <button
                 type="button"
@@ -235,24 +243,25 @@ export function EpisodeEditor({
               />
             </div>
             <p className="text-[11px] text-[#94a3b8]">
-              Bas ek link daal do, yeh automatic server ban jayega aur turant chalega.
+              Single link daalenge toh player me "MAIN" aayega. Dono daalenge toh "Reign" aur "Noir"
+              aayenge.
             </p>
           </div>
 
-          {/* Optional Backup Server Toggle */}
+          {/* Optional Noir Server Toggle */}
           {!showBackupServer ? (
             <button
               type="button"
               onClick={() => setShowBackupServer(true)}
               className="text-xs font-semibold text-[#94a3b8] hover:text-white transition cursor-pointer flex items-center gap-1"
             >
-              + Add Backup Server 2 (Optional)
+              + Add Noir Server 2 (Optional)
             </button>
           ) : (
             <div className="space-y-2 pt-1 border-t border-white/[0.06]">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-[#94a3b8]">
-                  Backup Server 2 URL (Optional):
+                  Noir Server 2 URL (Optional):
                 </label>
                 <button
                   type="button"
@@ -262,14 +271,14 @@ export function EpisodeEditor({
                   }}
                   className="text-[11px] text-rose-400 hover:underline cursor-pointer"
                 >
-                  Remove Server 2
+                  Remove Noir Server
                 </button>
               </div>
               <input
                 type="text"
                 value={server2Url}
                 onChange={(e) => setServer2Url(e.target.value)}
-                placeholder="https://backup-server..."
+                placeholder="https://noir-backup-server..."
                 className="w-full rounded-xl bg-white/[0.05] border border-white/10 px-3.5 py-2 text-xs font-medium text-white placeholder:text-neutral-500 focus:border-[#6366f1] focus:outline-none"
               />
             </div>
