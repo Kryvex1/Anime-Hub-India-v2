@@ -1,4 +1,4 @@
-const firebaseConfig = {
+{
   apiKey: "AIzaSyBkNZMrIUwd4sbAI69FGcBf2mbAqhhy_eA",
   authDomain: "chatcat-3ec45.firebaseapp.com",
   databaseURL: "https://chatcat-3ec45-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -6,4 +6,4 @@ const firebaseConfig = {
   storageBucket: "chatcat-3ec45.firebasestorage.app",
   messagingSenderId: "994413126402",
   appId: "1:994413126402:web:768de011c8106e0a01581b"
-};
+}
