@@ -1,12 +1,9 @@
-{
-  "projectId": "animehubindia-b3c58",
-  "appId": "1:9403768832:web:c82c8cbd4658daa4bcb8e5",
-  "apiKey": "AIzaSyA_tIhhu5sOrgP22osO6eZ-oB7MQkGFM84",
-  "authDomain": "animehubindia-b3c58.firebaseapp.com",
-  "databaseURL": "https://animehubindia-b3c58-default-rtdb.asia-southeast1.firebasedatabase.app",
-  "storageBucket": "animehubindia-b3c58.firebasestorage.app",
-  "messagingSenderId": "9403768832",
-  "measurementId": "",
-  "oAuthClientId": "",
-  "recaptchaSiteKey": ""
-}
+const firebaseConfig = {
+  apiKey: "AIzaSyBkNZMrIUwd4sbAI69FGcBf2mbAqhhy_eA",
+  authDomain: "chatcat-3ec45.firebaseapp.com",
+  databaseURL: "https://chatcat-3ec45-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "chatcat-3ec45",
+  storageBucket: "chatcat-3ec45.firebasestorage.app",
+  messagingSenderId: "994413126402",
+  appId: "1:994413126402:web:768de011c8106e0a01581b"
+};
