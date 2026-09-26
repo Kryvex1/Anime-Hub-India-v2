@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Play, Trash2, X, History } from "lucide-react";
 import { useWatchHistory, type WatchHistoryItem } from "@/lib/watch-history";
 import { getMediaCategory } from "@/lib/routes-helper";
-import { img } from "./media";
+import { img, Img } from "./media";
 
 export function ContinueWatchingRow() {
   const { history, removeItem, clearAll, ready } = useWatchHistory();
@@ -100,18 +100,12 @@ function ContinueWatchingCard({
 
   const thumbnailInner = (
     <>
-      {backdropUrl ? (
-        <img
-          src={backdropUrl}
-          alt={item.animeTitle}
-          loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-900 to-neutral-950 text-neutral-600">
-          <Play className="w-10 h-10 opacity-30" />
-        </div>
-      )}
+      <Img
+        src={backdropUrl}
+        alt={item.animeTitle}
+        rounded="rounded-none"
+        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
 
       {/* Gradient Overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />

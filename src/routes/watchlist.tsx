@@ -10,7 +10,7 @@ import { fetchWatchlistItems } from "@/lib/anime.functions";
 import { useWatchlist } from "@/lib/watchlist";
 import { useWatchHistory, type WatchHistoryItem } from "@/lib/watch-history";
 import { getMediaCategory } from "@/lib/routes-helper";
-import { img } from "@/components/anime/media";
+import { img, Img } from "@/components/anime/media";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/watchlist")({
@@ -274,18 +274,12 @@ function LibraryPage() {
                   >
                     {/* Media Thumbnail */}
                     <div className="relative aspect-video w-full overflow-hidden bg-neutral-950">
-                      {thumb ? (
-                        <img
-                          src={thumb}
-                          alt={item.animeTitle}
-                          loading="lazy"
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-neutral-900 text-neutral-600">
-                          <Film className="w-8 h-8" />
-                        </div>
-                      )}
+                      <Img
+                        src={thumb}
+                        alt={item.animeTitle}
+                        rounded="rounded-none"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
 
                       {/* Top Badges */}
                       <div className="absolute top-2.5 left-2.5">

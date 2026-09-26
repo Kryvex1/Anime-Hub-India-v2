@@ -5,7 +5,7 @@ import { IconProfile } from "./icons";
 const TMDB_BASE = "https://image.tmdb.org/t/p/";
 
 /**
- * Fast cached image URL generator using wsrv.nl proxy (Cloudflare global CDN + WebP compression)
+ * Fast direct TMDB global image CDN generator (100% reliable on Vercel & all domains)
  */
 export function img(path: string | null | undefined, size = "w500"): string | null {
   if (!path || typeof path !== "string" || !path.trim()) return null;
@@ -13,24 +13,18 @@ export function img(path: string | null | undefined, size = "w500"): string | nu
 
   // If already a full URL
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    if (trimmed.includes("wsrv.nl")) return trimmed;
-    return `https://wsrv.nl/?url=${encodeURIComponent(trimmed)}&output=webp&q=80`;
+    return trimmed;
   }
 
-  const cleanPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
-  // Proxy TMDB through wsrv.nl CDN
-  return `https://wsrv.nl/?url=image.tmdb.org/t/p/${size}/${cleanPath}&output=webp&q=80`;
+  const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return `${TMDB_BASE}${size}${cleanPath}`;
 }
 
 /**
- * Direct unproxied TMDB image URL as fallback
+ * Direct TMDB image URL
  */
 export function directImg(path: string | null | undefined, size = "w500"): string | null {
-  if (!path || typeof path !== "string" || !path.trim()) return null;
-  const trimmed = path.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  return `${TMDB_BASE}${size}${cleanPath}`;
+  return img(path, size);
 }
 
 export function Img({

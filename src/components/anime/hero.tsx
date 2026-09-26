@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Info, Star, Bookmark, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 import type { CardItem } from "@/lib/tmdb";
 import { cn } from "@/lib/utils";
-import { img } from "./media";
+import { img, Img } from "./media";
 import { useWatchlist } from "@/lib/watchlist";
 import { getMediaCategory } from "@/lib/routes-helper";
 
@@ -153,13 +153,13 @@ export function Hero({ items }: { items: CardItem[] }) {
           if (!bgUrl) return null;
           const isActive = i === index;
           return (
-            <img
+            <Img
               key={`bg-${it.id}`}
               src={bgUrl}
               alt=""
-              aria-hidden="true"
+              rounded="rounded-none"
               className={cn(
-                "absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-700 ease-out",
+                "absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-700 ease-out pointer-events-none",
                 isActive ? "opacity-35" : "opacity-0",
               )}
             />
@@ -395,12 +395,11 @@ export function Hero({ items }: { items: CardItem[] }) {
                     >
                       {/* Inner Container ensuring rounded corner mask never bleeds */}
                       <div className="relative w-full h-full rounded-2xl overflow-hidden">
-                        <img
-                          src={posterUrl || ""}
+                        <Img
+                          src={posterUrl}
                           alt={it.title}
-                          loading="eager"
-                          draggable={false}
-                          className="w-full h-full object-cover rounded-2xl pointer-events-none"
+                          rounded="rounded-2xl"
+                          className="w-full h-full object-cover pointer-events-none"
                         />
 
                         {/* Gradient Overlay */}

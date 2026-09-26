@@ -248,16 +248,52 @@ export async function tmdb<T>(path: string, params: Params = {}, signal?: AbortS
   }
 
   const execute = async (): Promise<T> => {
-    // Try 1: Fast Server Proxy
+    // Try 1: Direct TMDB API with active built-in pool key (Instant response, zero Vercel timeout)
+    for (let i = 0; i < 3; i++) {
+      try {
+        const directController = new AbortController();
+        const directTimeoutId = setTimeout(() => directController.abort(), 6000);
+
+        if (signal) {
+          if (signal.aborted) {
+            clearTimeout(directTimeoutId);
+            throw new DOMException("Aborted", "AbortError");
+          }
+          signal.addEventListener("abort", () => {
+            clearTimeout(directTimeoutId);
+            directController.abort();
+          });
+        }
+
+        const apiKey = getRandomApiKey();
+        const directUrl = new URL(DIRECT_BASE + cleanPath);
+        directUrl.searchParams.set("api_key", apiKey);
+        for (const [k, v] of Object.entries(params)) {
+          if (v !== undefined && v !== "" && k !== "api_key") {
+            directUrl.searchParams.set(k, String(v));
+          }
+        }
+
+        const directRes = await fetch(directUrl.toString(), { signal: directController.signal });
+        clearTimeout(directTimeoutId);
+
+        if (directRes.ok) {
+          const data = (await directRes.json()) as T;
+          memoryCache.set(cacheKey, { at: Date.now(), ttl, data });
+          saveToPersistentStorage(cacheKey, ttl, data);
+          return data;
+        }
+      } catch {
+        // Retry next key in pool
+      }
+    }
+
+    // Try 2: Server Proxy Failover
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7000);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      if (signal) {
-        if (signal.aborted) {
-          clearTimeout(timeoutId);
-          throw new DOMException("Aborted", "AbortError");
-        }
+      if (signal && !signal.aborted) {
         signal.addEventListener("abort", () => {
           clearTimeout(timeoutId);
           controller.abort();
@@ -275,42 +311,7 @@ export async function tmdb<T>(path: string, params: Params = {}, signal?: AbortS
         return data;
       }
     } catch {
-      // Proxy failed or timed out — fall through to direct TMDB backup below
-    }
-
-    // Try 2: Direct TMDB failover with pool keys retry
-    for (let i = 0; i < 3; i++) {
-      try {
-        const directController = new AbortController();
-        const directTimeoutId = setTimeout(() => directController.abort(), 6000);
-
-        if (signal) {
-          signal.addEventListener("abort", () => {
-            clearTimeout(directTimeoutId);
-            directController.abort();
-          });
-        }
-
-        const directUrl = new URL(DIRECT_BASE + cleanPath);
-        directUrl.searchParams.set("api_key", getRandomApiKey());
-        for (const [k, v] of Object.entries(params)) {
-          if (v !== undefined && v !== "" && k !== "api_key") {
-            directUrl.searchParams.set(k, String(v));
-          }
-        }
-
-        const directRes = await fetch(directUrl.toString(), { signal: directController.signal });
-        clearTimeout(directTimeoutId);
-
-        if (directRes.ok) {
-          const data = (await directRes.json()) as T;
-          memoryCache.set(cacheKey, { at: Date.now(), ttl, data });
-          saveToPersistentStorage(cacheKey, ttl, data);
-          return data;
-        }
-      } catch {
-        // Retry next key
-      }
+      // Proxy failed or timed out
     }
 
     // Try 3: Last Resort — Return stale cache data if available instead of crashing!

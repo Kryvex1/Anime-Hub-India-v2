@@ -1,6 +1,6 @@
 {
-  "name": "Animao",
-  "description": "Discover and stream anime with instant HD playback on Animao.",
+  "name": "CinePulse",
+  "description": "Stream trending movies, web series, and anime with fast HD multi-audio playback and Hindi dub on CinePulse.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
