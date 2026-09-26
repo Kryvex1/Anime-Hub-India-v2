@@ -6,10 +6,16 @@ import { fetchPopular } from "@/lib/anime.functions";
 export const Route = createFileRoute("/popular")({
   head: () => ({
     meta: [
-      { title: "Popular Anime Series — AniStream" },
-      { name: "description", content: "Browse the most popular anime series of all time." },
-      { property: "og:title", content: "Popular Anime Series — AniStream" },
-      { property: "og:description", content: "Browse the most popular anime series of all time." },
+      { title: "Popular Titles — CinePulse" },
+      {
+        name: "description",
+        content: "Browse the most popular movies and series of all time on CinePulse.",
+      },
+      { property: "og:title", content: "Popular Titles — CinePulse" },
+      {
+        property: "og:description",
+        content: "Browse the most popular movies and series of all time on CinePulse.",
+      },
     ],
   }),
   component: PopularPage,
@@ -21,8 +27,8 @@ function PopularPage() {
       queryKey="popular-page"
       fetchPage={(page) => fetchPopular({ data: { page } })}
       eyebrow="Fan favourites"
-      title="Popular Anime"
-      description="The titles with the biggest audiences across the anime world."
+      title="Popular Titles"
+      description="The movies, web series, and anime with the biggest audiences worldwide."
     />
   );
 }

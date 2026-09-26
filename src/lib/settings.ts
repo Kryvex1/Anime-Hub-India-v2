@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 
 export type ThemeId =
-  "indigo" | "emerald" | "amber" | "crimson" | "cyan" | "rose" | "sunset" | "cyberpunk";
+  "netflix" | "indigo" | "emerald" | "amber" | "crimson" | "cyan" | "rose" | "sunset" | "cyberpunk";
 
 export interface ThemeOption {
   id: ThemeId;
@@ -14,6 +14,15 @@ export interface ThemeOption {
 }
 
 export const THEME_OPTIONS: ThemeOption[] = [
+  {
+    id: "netflix",
+    name: "Netflix Red (Default)",
+    primary: "#E50914",
+    glow: "#ff333d",
+    hover: "#b80710",
+    rgb: "229, 9, 20",
+    gradient: "linear-gradient(135deg, #E50914 0%, #b80710 100%)",
+  },
   {
     id: "indigo",
     name: "Cyber Violet",
@@ -99,7 +108,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: "indigo",
+  theme: "netflix",
   normalMode: true,
   safeMode: false,
   adultMode: false,
@@ -108,14 +117,18 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoPlayNext: true,
 };
 
-const SETTINGS_KEY = "anistream_user_settings_v4";
+const SETTINGS_KEY = "anistream_user_settings_v5";
 
 export function loadStoredSettings(): AppSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (!raw) {
+      return DEFAULT_SETTINGS;
+    }
+    const parsed = JSON.parse(raw);
+    parsed.theme = "netflix"; // Enforce pure red Netflix theme
+    return { ...DEFAULT_SETTINGS, ...parsed, theme: "netflix" };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -124,17 +137,18 @@ export function loadStoredSettings(): AppSettings {
 export function saveStoredSettings(settings: AppSettings): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    applyThemeToDOM(settings.theme);
-    window.dispatchEvent(new CustomEvent("anistream:settings-changed", { detail: settings }));
+    const forced = { ...settings, theme: "netflix" as ThemeId };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(forced));
+    applyThemeToDOM("netflix");
+    window.dispatchEvent(new CustomEvent("anistream:settings-changed", { detail: forced }));
   } catch {
     // Ignore storage issues
   }
 }
 
-export function applyThemeToDOM(themeId: ThemeId): void {
+export function applyThemeToDOM(themeId: ThemeId = "netflix"): void {
   if (typeof document === "undefined") return;
-  const theme = THEME_OPTIONS.find((t) => t.id === themeId) || THEME_OPTIONS[0];
+  const theme = THEME_OPTIONS[0]; // Always Netflix red
   const root = document.documentElement;
 
   root.style.setProperty("--brand-primary", theme.primary);
@@ -148,7 +162,7 @@ export function applyThemeToDOM(themeId: ThemeId): void {
   root.style.setProperty("--color-brand", theme.primary);
   root.style.setProperty("--color-brand-glow", theme.glow);
 
-  root.setAttribute("data-theme", themeId);
+  root.setAttribute("data-theme", "netflix");
 }
 
 // React Hook for App Settings

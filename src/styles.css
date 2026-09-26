@@ -32,12 +32,12 @@
 
 @theme {
   --font-sans:
-    "Inter", "Hotstar Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
-  --color-brand: #6366f1;
-  --color-brand-glow: #818cf8;
-  --color-surface: #0d111c;
-  --color-surface-2: #111622;
+  --color-brand: #E50914;
+  --color-brand-glow: #ff2a34;
+  --color-surface: #181818;
+  --color-surface-2: #242424;
 }
 
 @theme inline {
@@ -71,63 +71,68 @@
 }
 
 :root {
-  --radius: 0.75rem;
-  --background: #070a12;
-  --foreground: #f8fafc;
-  --card: #0d111c;
-  --card-foreground: #f8fafc;
-  --popover: #0d111c;
-  --popover-foreground: #f8fafc;
-  --brand-primary: #6366f1;
-  --brand-glow: #818cf8;
-  --brand-hover: #4f46e5;
-  --brand-rgb: 99, 102, 241;
-  --brand-gradient: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  --radius: 0.5rem;
+  --background: #141414;
+  --foreground: #ffffff;
+  --card: #181818;
+  --card-foreground: #ffffff;
+  --popover: #181818;
+  --popover-foreground: #ffffff;
+  --brand-primary: #E50914;
+  --brand-glow: #ff2a34;
+  --brand-hover: #b80710;
+  --brand-rgb: 229, 9, 20;
+  --brand-gradient: linear-gradient(135deg, #E50914 0%, #b80710 100%);
   --primary: var(--brand-primary);
   --primary-foreground: #ffffff;
-  --secondary: #111622;
-  --secondary-foreground: #f8fafc;
-  --muted: #151c2c;
-  --muted-foreground: #94a3b8;
-  --accent: var(--brand-glow);
+  --secondary: #232323;
+  --secondary-foreground: #ffffff;
+  --muted: #2f2f2f;
+  --muted-foreground: #aaaaaa;
+  --accent: var(--brand-primary);
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.15);
   --ring: var(--brand-primary);
+}
+
+/* Netflix Video Player Container */
+.player-container {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000000;
+  overflow: hidden;
+}
+
+.player-container iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
 }
 
 .dark {
-  --background: #070a12;
-  --foreground: #f8fafc;
-  --card: #0d111c;
-  --card-foreground: #f8fafc;
-  --popover: #0d111c;
-  --popover-foreground: #f8fafc;
+  --background: #141414;
+  --foreground: #ffffff;
+  --card: #181818;
+  --card-foreground: #ffffff;
+  --popover: #181818;
+  --popover-foreground: #ffffff;
   --primary: var(--brand-primary);
   --primary-foreground: #ffffff;
-  --secondary: #111622;
-  --secondary-foreground: #f8fafc;
-  --muted: #151c2c;
-  --muted-foreground: #94a3b8;
-  --accent: var(--brand-glow);
+  --secondary: #222222;
+  --secondary-foreground: #ffffff;
+  --muted: #2a2a2a;
+  --muted-foreground: #a3a3a3;
+  --accent: var(--brand-primary);
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
   --ring: var(--brand-primary);
-}
-
-/* Universal Smooth Color Fade Transition */
-*,
-::before,
-::after {
-  transition-property:
-    color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 220ms;
 }
 
 /* Global Dynamic Theme Overrides */
@@ -220,8 +225,23 @@
   }
 
   ::selection {
-    background: #6366f1;
-    color: #ffffff;
+    background: #E50914 !important;
+    color: #ffffff !important;
+  }
+  ::-moz-selection {
+    background: #E50914 !important;
+    color: #ffffff !important;
+  }
+
+  /* Universal scrollbar removal */
+  * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 }
 
@@ -267,7 +287,7 @@
 }
 
 @utility text-gradient {
-  background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+  background: linear-gradient(135deg, #ff333d 0%, #E50914 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -289,8 +309,8 @@
 .anime-glow-card:hover {
   transform: translateY(-5px) scale(1.02);
   box-shadow:
-    0 15px 35px -10px rgba(99, 102, 241, 0.45),
-    0 0 20px 2px rgba(129, 140, 248, 0.2);
+    0 15px 35px -10px rgba(229, 9, 20, 0.45),
+    0 0 20px 2px rgba(255, 42, 52, 0.2);
 }
 
 @keyframes shimmer-slide {
@@ -360,14 +380,14 @@
 @keyframes pulseGlow {
   0%,
   100% {
-    box-shadow: 0 0 20px rgba(99, 102, 241, 0.25);
-    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 20px rgba(229, 9, 20, 0.25);
+    border-color: rgba(229, 9, 20, 0.35);
   }
   50% {
     box-shadow:
-      0 0 40px rgba(99, 102, 241, 0.55),
-      0 0 15px rgba(129, 140, 248, 0.4);
-    border-color: rgba(99, 102, 241, 0.75);
+      0 0 40px rgba(229, 9, 20, 0.55),
+      0 0 15px rgba(255, 42, 52, 0.4);
+    border-color: rgba(229, 9, 20, 0.75);
   }
 }
 

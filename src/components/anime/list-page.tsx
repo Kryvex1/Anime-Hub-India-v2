@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { CardItem } from "@/lib/tmdb";
 import { useAppSettings } from "@/lib/settings";
 
+import { CardSkeleton } from "./card";
 import { Grid } from "./row";
 import { EmptyState, ErrorState } from "./states";
 
@@ -17,8 +18,8 @@ export function LoadMoreList({
   description,
   ranked,
   actions,
-  emptyTitle = "No Anime Found",
-  emptyHint = "No anime available in this section yet.",
+  emptyTitle = "No Titles Found",
+  emptyHint = "No titles available in this section yet.",
 }: {
   queryKey: string;
   fetchPage: (page: number) => Promise<Page>;
@@ -82,21 +83,40 @@ export function LoadMoreList({
       ) : !isPending && items.length === 0 ? (
         <EmptyState title={emptyTitle} hint={emptyHint} />
       ) : (
-        <Grid
-          items={ranked ? items.slice(0, 10) : items}
-          loading={isPending || (isFetching && page > 1)}
-          ranked={!!ranked}
-        />
+        <>
+          <Grid
+            items={ranked ? items.slice(0, 10) : items}
+            loading={isPending && items.length === 0}
+            ranked={!!ranked}
+          />
+
+          {/* Smooth skeletons appended at the bottom when fetching next page */}
+          {isFetching && page > 1 && (
+            <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <CardSkeleton key={`skeleton-more-${i}`} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {hasMore && !ranked && (
         <div className="mt-10 flex justify-center">
           <button
+            type="button"
             disabled={isFetching}
             onClick={() => setPage((p) => p + 1)}
-            className="rounded-full bg-white/[0.05] border border-white/[0.08] px-7 py-3 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-[var(--brand-primary)] active:scale-95 disabled:opacity-50 cursor-pointer shadow-md shadow-black/40"
+            className="inline-flex items-center gap-2.5 rounded-full bg-white/[0.06] hover:bg-[#E50914] border border-white/10 px-8 py-3.5 text-xs sm:text-sm font-bold text-white transition-all duration-200 active:scale-95 disabled:opacity-75 disabled:hover:bg-white/[0.06] cursor-pointer shadow-lg shadow-black/40"
           >
-            {isFetching ? "Loading…" : "Load more"}
+            {isFetching ? (
+              <>
+                <span className="h-4 w-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                <span>Loading more...</span>
+              </>
+            ) : (
+              <span>Load More</span>
+            )}
           </button>
         </div>
       )}

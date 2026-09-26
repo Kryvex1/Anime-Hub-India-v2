@@ -1,12 +1,4 @@
-import { findGenre, GENRES, animeMatchesGenre } from "./genres";
-import {
-  fetchConfiguredAnimeIds,
-  fetchAddedAnimeList,
-  fetchHeroBanners,
-  type AddedAnimeDoc,
-  type HeroBannerDoc,
-  addAnimeToWebsite,
-} from "./episodes.firebase";
+import { findGenre, animeMatchesGenre } from "./genres";
 import {
   type CardItem,
   details,
@@ -14,67 +6,15 @@ import {
   season,
   tmdb,
   toCard,
+  trending as fetchTmdbTrending,
+  discover as fetchTmdbDiscover,
+  discoverMovies as fetchTmdbDiscoverMovies,
+  ANIMATION_GENRE,
   type Show,
-  type PagedResults,
 } from "./tmdb";
 
 // In-memory cache for CardItems with TTL
 const animeCardCache = new Map<number, { at: number; item: CardItem }>();
-
-// Cache for TMDB real trending IDs
-let cachedTmdbTrendingIds: { at: number; ids: Set<number> } | null = null;
-
-export async function getTmdbTrendingIds(): Promise<Set<number>> {
-  const now = Date.now();
-  if (cachedTmdbTrendingIds && now - cachedTmdbTrendingIds.at < 1000 * 60 * 30) {
-    return cachedTmdbTrendingIds.ids;
-  }
-
-  const idSet = new Set<number>();
-  try {
-    const [tvTrending, movieTrending] = await Promise.allSettled([
-      tmdb<PagedResults<Show>>("/trending/tv/week"),
-      tmdb<PagedResults<Show>>("/trending/movie/week"),
-    ]);
-
-    if (tvTrending.status === "fulfilled" && tvTrending.value?.results) {
-      tvTrending.value.results.forEach((s) => {
-        if (s.id) idSet.add(s.id);
-      });
-    }
-
-    if (movieTrending.status === "fulfilled" && movieTrending.value?.results) {
-      movieTrending.value.results.forEach((s) => {
-        if (s.id) idSet.add(s.id);
-      });
-    }
-
-    cachedTmdbTrendingIds = { at: now, ids: idSet };
-  } catch (err) {
-    console.error("Error fetching TMDB trending IDs:", err);
-  }
-
-  return idSet;
-}
-
-function docToCardItem(doc: AddedAnimeDoc | HeroBannerDoc): CardItem {
-  const animeId = Number(doc.id || (doc as AddedAnimeDoc).animeId);
-  return {
-    id: animeId,
-    title: doc.title || "Anime",
-    originalTitle: doc.originalTitle || doc.title || "",
-    overview: doc.overview || "",
-    poster: doc.poster && doc.poster.trim() !== "" ? doc.poster : null,
-    backdrop: doc.backdrop && doc.backdrop.trim() !== "" ? doc.backdrop : null,
-    rating: typeof doc.rating === "number" ? doc.rating : 8.0,
-    voteCount: (doc as AddedAnimeDoc).voteCount ?? 100,
-    year: doc.year || "Anime",
-    firstAirDate: doc.year ? `${doc.year}-01-01` : "",
-    type: (doc.type as "TV" | "Movie") || "TV",
-    genres: doc.genres || ["Animation", "Action"],
-    popularity: (doc as AddedAnimeDoc).popularity ?? 100,
-  };
-}
 
 export async function fetchCardItemsByIds(ids: number[]): Promise<CardItem[]> {
   if (!ids || ids.length === 0) return [];
@@ -96,22 +36,6 @@ export async function fetchCardItemsByIds(ids: number[]): Promise<CardItem[]> {
         }
         const card = toCard(s);
         animeCardCache.set(id, { at: now, item: card });
-
-        // Auto-persist full metadata to RTDB with valid poster & backdrop
-        void addAnimeToWebsite(card.id, card.title, card.poster, {
-          title: card.title,
-          originalTitle: card.originalTitle,
-          poster: card.poster,
-          backdrop: card.backdrop,
-          overview: card.overview,
-          rating: card.rating,
-          voteCount: card.voteCount,
-          year: card.year,
-          type: card.type,
-          genres: card.genres,
-          popularity: card.popularity,
-        });
-
         return card;
       } catch {
         return null;
@@ -122,110 +46,102 @@ export async function fetchCardItemsByIds(ids: number[]): Promise<CardItem[]> {
   return items.filter((i): i is CardItem => i !== null);
 }
 
-// In-memory cache for configured cards for instant page navigation
-let cachedConfiguredCards: { at: number; cards: CardItem[] } | null = null;
+// In-memory cache for home feed to deliver instant 0ms loads on revisits
+let cachedHomeFeed: { at: number; data: Awaited<ReturnType<typeof fetchHomeDirect>> } | null = null;
 
-export function invalidateConfiguredCardsCache() {
-  cachedConfiguredCards = null;
-}
+async function fetchHomeDirect() {
+  const [trendingRes, tvSeriesRes, moviesRes, topRatedRes, animeRes, actionRes] = await Promise.all(
+    [
+      fetchTmdbTrending(1, "week").catch(() => ({ items: [] as CardItem[] })),
+      fetchTmdbDiscover({ sort_by: "popularity.desc" }, 1).catch(() => ({
+        items: [] as CardItem[],
+      })),
+      fetchTmdbDiscoverMovies({ sort_by: "popularity.desc" }, 1).catch(() => ({
+        items: [] as CardItem[],
+      })),
+      fetchTmdbDiscover({ sort_by: "vote_average.desc", "vote_count.gte": "200" }, 1).catch(() => ({
+        items: [] as CardItem[],
+      })),
+      fetchTmdbDiscover({ with_genres: `${ANIMATION_GENRE}` }, 1).catch(() => ({
+        items: [] as CardItem[],
+      })),
+      fetchTmdbDiscover({ with_genres: "28,10759" }, 1).catch(() => ({
+        items: [] as CardItem[],
+      })),
+    ],
+  );
 
-// Fetch all configured anime card items with full poster self-healing
-export async function getConfiguredAnimeCards(force = false): Promise<CardItem[]> {
-  const now = Date.now();
-  if (!force && cachedConfiguredCards && now - cachedConfiguredCards.at < 1000 * 20) {
-    return cachedConfiguredCards.cards;
+  const trendingCards = trendingRes.items || [];
+  const tvSeriesCards = tvSeriesRes.items || [];
+  const movieCards = moviesRes.items || [];
+  const topRatedCards = topRatedRes.items || [];
+  const animeCards = animeRes.items || [];
+  const actionCards = actionRes.items || [];
+
+  // Deduplicate and select Hero banners with backdrops
+  const heroCandidates = [...trendingCards, ...movieCards, ...tvSeriesCards].filter((c) =>
+    Boolean(c.backdrop),
+  );
+  const seenHeroIds = new Set<number>();
+  const heroItems: CardItem[] = [];
+
+  for (const item of heroCandidates) {
+    if (!seenHeroIds.has(item.id)) {
+      seenHeroIds.add(item.id);
+      heroItems.push(item);
+      if (heroItems.length >= 10) break;
+    }
   }
 
-  const addedList = await fetchAddedAnimeList();
-  const cardMap = new Map<number, CardItem>();
-  const needsTmdbFetch: number[] = [];
-
-  addedList.forEach((doc) => {
-    const card = docToCardItem(doc);
-    if (card.id) {
-      // If poster is missing or null, mark for fetching from TMDB
-      if (!card.poster) {
-        needsTmdbFetch.push(card.id);
-      } else {
-        cardMap.set(card.id, card);
-      }
-    }
-  });
-
-  const configuredIds = await fetchConfiguredAnimeIds();
-  configuredIds.forEach((id) => {
-    if (!cardMap.has(id)) {
-      needsTmdbFetch.push(id);
-    }
-  });
-
-  const uniqueFetchIds = Array.from(new Set(needsTmdbFetch));
-  if (uniqueFetchIds.length > 0) {
-    const fetchedCards = await fetchCardItemsByIds(uniqueFetchIds);
-    fetchedCards.forEach((c) => cardMap.set(c.id, c));
+  // Fallback hero if needed
+  if (heroItems.length === 0 && trendingCards.length > 0) {
+    heroItems.push(...trendingCards.slice(0, 5));
   }
 
-  const result = Array.from(cardMap.values());
-  cachedConfiguredCards = { at: now, cards: result };
-  return result;
-}
-
-// Pagination helper for an in-memory array of CardItems
-function paginateCards(items: CardItem[], page = 1, pageSize = 20) {
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const validPage = Math.max(1, Math.min(page, totalPages));
-  const start = (validPage - 1) * pageSize;
-  const pagedItems = items.slice(start, start + pageSize);
+  // Netflix Top 10 Today list
+  const top10 = trendingCards.slice(0, 10);
 
   return {
-    page: validPage,
-    totalPages,
-    items: pagedItems,
+    hero: heroItems,
+    trending: trendingCards,
+    top10,
+    tvSeries: tvSeriesCards,
+    movies: movieCards,
+    popular: tvSeriesCards,
+    topRated: topRatedCards,
+    animeHits: animeCards,
+    actionAdventure: actionCards.length > 0 ? actionCards : movieCards.slice(0, 15),
+    fantasySupernatural: animeCards.slice(0, 15),
+    romanceDrama: movieCards.filter((c) => c.genres?.some((g) => /romance|drama|comedy/i.test(g))),
+    latest: trendingCards.slice().reverse(),
+    totalConfigured: trendingCards.length + movieCards.length + tvSeriesCards.length,
   };
 }
 
-export async function getTrending(page = 1, _timeWindow: "week" | "day" = "week") {
-  const [cards, tmdbTrendingIds] = await Promise.all([
-    getConfiguredAnimeCards(),
-    getTmdbTrendingIds(),
-  ]);
+export async function fetchHome() {
+  const now = Date.now();
+  if (cachedHomeFeed && now - cachedHomeFeed.at < 1000 * 60 * 10) {
+    return cachedHomeFeed.data;
+  }
+  const data = await fetchHomeDirect();
+  cachedHomeFeed = { at: now, data };
+  return data;
+}
 
-  // Check if any of user's added anime are in real TMDB Trending
-  const matchedInTrending = cards.filter((item) => tmdbTrendingIds.has(item.id));
-
-  // If there are matches, show only those matched; otherwise sort added by popularity
-  const finalTrending =
-    matchedInTrending.length > 0
-      ? matchedInTrending.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
-      : [...cards].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0) || b.rating - a.rating);
-
-  return paginateCards(finalTrending, page, 20);
+export async function getTrending(page = 1, timeWindow: "week" | "day" = "week") {
+  return fetchTmdbTrending(page, timeWindow);
 }
 
 export async function getPopular(page = 1) {
-  const cards = await getConfiguredAnimeCards();
-  const sorted = [...cards].sort(
-    (a, b) => (b.popularity ?? 0) - (a.popularity ?? 0) || (b.voteCount ?? 0) - (a.voteCount ?? 0),
-  );
-  return paginateCards(sorted, page, 20);
+  return fetchTmdbDiscover({ sort_by: "popularity.desc" }, page);
 }
 
 export async function getTopRated(page = 1) {
-  const cards = await getConfiguredAnimeCards();
-  const sorted = [...cards].sort(
-    (a, b) => b.rating - a.rating || (b.voteCount ?? 0) - (a.voteCount ?? 0),
-  );
-  return paginateCards(sorted, page, 20);
+  return fetchTmdbDiscover({ sort_by: "vote_average.desc", "vote_count.gte": "150" }, page);
 }
 
 export async function getLatest(page = 1) {
-  const cards = await getConfiguredAnimeCards();
-  const sorted = [...cards].sort((a, b) => {
-    const dateA = a.firstAirDate || a.year || "";
-    const dateB = b.firstAirDate || b.year || "";
-    return dateB.localeCompare(dateA);
-  });
-  return paginateCards(sorted, page, 20);
+  return fetchTmdbDiscover({ sort_by: "first_air_date.desc", "vote_count.gte": "10" }, page);
 }
 
 export async function getSearch(
@@ -246,111 +162,7 @@ export async function getSearch(
 
   if (!query) return { page: 1, totalPages: 0, items: [] as CardItem[] };
 
-  if (options?.bypassFilter) {
-    return searchAnime(query, page, signal, options);
-  }
-
-  const cards = await getConfiguredAnimeCards();
-  const lower = query.toLowerCase();
-  const matched = cards.filter((item) => {
-    const t1 = (item.title || "").toLowerCase();
-    const t2 = (item.originalTitle || "").toLowerCase();
-    const ov = (item.overview || "").toLowerCase();
-    const genres = (item.genres || []).map((g) => g.toLowerCase()).join(" ");
-    return t1.includes(lower) || t2.includes(lower) || ov.includes(lower) || genres.includes(lower);
-  });
-
-  return paginateCards(matched, page, 20);
-}
-
-export async function fetchHome() {
-  // Fetch configured cards, custom hero banners, and TMDB real trending IDs
-  const [cards, customHeroBanners, tmdbTrendingIds] = await Promise.all([
-    getConfiguredAnimeCards(),
-    fetchHeroBanners(),
-    getTmdbTrendingIds(),
-  ]);
-
-  if (cards.length === 0 && customHeroBanners.length === 0) {
-    return {
-      hero: [] as CardItem[],
-      trending: [] as CardItem[],
-      popular: [] as CardItem[],
-      actionAdventure: [] as CardItem[],
-      fantasySupernatural: [] as CardItem[],
-      movies: [] as CardItem[],
-      romanceDrama: [] as CardItem[],
-      topRated: [] as CardItem[],
-      latest: [] as CardItem[],
-      totalConfigured: 0,
-    };
-  }
-
-  // Hero selection: Custom hero banners if configured in Admin, or backdrops fallback
-  let heroItems: CardItem[] = [];
-  if (customHeroBanners.length > 0) {
-    heroItems = customHeroBanners.map(docToCardItem);
-  } else {
-    heroItems = cards.filter((c) => Boolean(c.backdrop)).slice(0, 5);
-    if (heroItems.length === 0 && cards.length > 0) {
-      heroItems = cards.slice(0, 5);
-    }
-  }
-
-  // 1. Trending: Check if any added anime are currently trending in TMDB
-  const matchedInTrending = cards.filter((item) => tmdbTrendingIds.has(item.id));
-  const trending =
-    matchedInTrending.length > 0
-      ? matchedInTrending.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
-      : [...cards].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0) || b.rating - a.rating);
-
-  // 2. Action & Adventure (TMDB Genre Filter)
-  const actionAdventure = cards.filter((c) =>
-    c.genres?.some((g) => /action|adventure|shounen/i.test(g)),
-  );
-
-  // 3. Fantasy & Supernatural (TMDB Genre Filter)
-  const fantasySupernatural = cards.filter((c) =>
-    c.genres?.some((g) => /fantasy|sci-fi|supernatural|magic|mystery/i.test(g)),
-  );
-
-  // 4. Blockbuster Anime Movies
-  const movies = cards.filter((c) => c.type?.toLowerCase() === "movie");
-
-  // 5. Romance & Slice of Life (TMDB Genre Filter)
-  const romanceDrama = cards.filter((c) =>
-    c.genres?.some((g) => /romance|drama|comedy|slice of life/i.test(g)),
-  );
-
-  // 6. Top Rated Masterpieces (Rating >= 8.0)
-  const topRated = cards
-    .filter((c) => c.rating >= 7.8)
-    .sort((a, b) => b.rating - a.rating || (b.voteCount ?? 0) - (a.voteCount ?? 0));
-
-  // 7. Popular Anime
-  const popular = [...cards].sort(
-    (a, b) => (b.popularity ?? 0) - (a.popularity ?? 0) || (b.voteCount ?? 0) - (a.voteCount ?? 0),
-  );
-
-  // 8. Recently Added
-  const latest = [...cards].sort((a, b) => {
-    const dateA = a.firstAirDate || a.year || "";
-    const dateB = b.firstAirDate || b.year || "";
-    return dateB.localeCompare(dateA);
-  });
-
-  return {
-    hero: heroItems,
-    trending,
-    popular,
-    actionAdventure,
-    fantasySupernatural,
-    movies,
-    romanceDrama,
-    topRated,
-    latest,
-    totalConfigured: cards.length || customHeroBanners.length,
-  };
+  return searchAnime(query, page, signal, options);
 }
 
 export async function fetchShow({ data }: { data: { id: number } }) {
@@ -384,10 +196,19 @@ export async function fetchByGenre(genreSlug: string, page = 1) {
   const genreObj = findGenre(genreSlug);
   if (!genreObj) return { page: 1, totalPages: 0, items: [] as CardItem[] };
 
-  const cards = await getConfiguredAnimeCards();
-  const matched = cards.filter((item) => animeMatchesGenre(item, genreSlug));
+  // If genre has a direct TMDB ID
+  if (genreObj.tmdbId) {
+    return fetchTmdbDiscover({ with_genres: `${ANIMATION_GENRE},${genreObj.tmdbId}` }, page);
+  }
 
-  return paginateCards(matched, page, 20);
+  // Fallback: fetch popular and filter by genre
+  const pop = await fetchTmdbDiscover({ sort_by: "popularity.desc" }, page);
+  const matched = pop.items.filter((item) => animeMatchesGenre(item, genreSlug));
+  return {
+    page: pop.page,
+    totalPages: pop.totalPages,
+    items: matched,
+  };
 }
 
 export async function fetchSearch(
@@ -444,4 +265,9 @@ export async function fetchLatest(args?: { data?: { page?: number } }) {
 
 export async function fetchWatchlistItems({ data }: { data: { ids: number[] } }) {
   return fetchCardItemsByIds(data.ids);
+}
+
+export async function fetchPerson({ data }: { data: { id: number } }) {
+  const { fetchPersonDetailsAndWorks } = await import("./tmdb");
+  return fetchPersonDetailsAndWorks(data.id);
 }

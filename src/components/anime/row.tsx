@@ -73,7 +73,7 @@ export function Row({
           const cardItem = item as CardItem;
           return (
             <div
-              key={cardItem.id}
+              key={`${cardItem.id}-${i}`}
               className="w-[34vw] shrink-0 snap-start sm:w-[24vw] md:w-[18vw] lg:w-[14vw] xl:w-[12vw]"
             >
               <AnimeCard item={cardItem} />
@@ -100,8 +100,8 @@ export function Grid({ items, loading }: { items: CardItem[]; loading?: boolean 
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-      {items.map((item) => (
-        <AnimeCard key={item.id} item={item} />
+      {items.map((item, i) => (
+        <AnimeCard key={`${item.id}-${i}`} item={item} />
       ))}
     </div>
   );

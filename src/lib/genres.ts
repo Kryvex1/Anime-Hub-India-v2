@@ -40,7 +40,7 @@ export const GENRES: GenreDef[] = [
     slug: "fantasy",
     name: "Fantasy",
     genreId: 10765,
-    tint: "from-violet-500/40",
+    tint: "from-rose-500/40",
     defaultBackdrop: "https://image.tmdb.org/t/p/w780/4QIZkPq8K2Fz9eH7aHk9qE3P2L4.jpg",
   },
   {
@@ -61,7 +61,7 @@ export const GENRES: GenreDef[] = [
     slug: "mystery",
     name: "Mystery",
     genreId: 9648,
-    tint: "from-indigo-500/40",
+    tint: "from-amber-500/40",
     defaultBackdrop: "https://image.tmdb.org/t/p/w780/7kxm1wzM5oR2c63vj0t0Q5YFmE2.jpg",
   },
   {

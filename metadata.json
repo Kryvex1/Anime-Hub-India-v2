@@ -1,5 +1,7 @@
 {
-  "name": "CineAnime Hub",
-  "description": "Anime discovery hub and multi-server streaming player with Firebase-authenticated admin control center.",
-  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "Animao",
+  "description": "Discover and stream anime with instant HD playback on Animao.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+

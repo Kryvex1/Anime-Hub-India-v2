@@ -4,7 +4,6 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { IconPlay } from "@/components/anime/icons";
 import { Hero, HeroSkeleton } from "@/components/anime/hero";
 import { Row } from "@/components/anime/row";
-import { ContinueWatchingRow } from "@/components/anime/continue-watching-row";
 import { ErrorState } from "@/components/anime/states";
 import { TelegramBanner } from "@/components/anime/telegram-banner";
 import { fetchHome } from "@/lib/anime.functions";
@@ -13,17 +12,17 @@ import { useAppSettings } from "@/lib/settings";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Anime Hub India — Watch & Discover Anime" },
+      { title: "CinePulse — Watch Movies, Series & Anime in HD" },
       {
         name: "description",
         content:
-          "Anime Hub India: Discover trending, popular, and top-rated anime with fast multi-server streaming.",
+          "CinePulse: Discover trending, popular movies, web series, and anime with fast HD multi-audio streaming.",
       },
-      { property: "og:title", content: "Anime Hub India — Watch & Discover Anime" },
+      { property: "og:title", content: "CinePulse — Watch Movies, Series & Anime in HD" },
       {
         property: "og:description",
         content:
-          "Anime Hub India: Discover trending, popular, and top-rated anime with fast multi-server streaming.",
+          "CinePulse: Discover trending, popular movies, web series, and anime with fast HD multi-audio streaming.",
       },
     ],
   }),
@@ -58,7 +57,7 @@ function Index() {
         <HeroSkeleton />
         <div className="-mt-16 relative z-10 space-y-4">
           <Row title="Trending Now" items={[]} loading />
-          <Row title="Popular Anime" items={[]} loading />
+          <Row title="Popular Titles" items={[]} loading />
         </div>
       </>
     );
@@ -69,7 +68,7 @@ function Index() {
   if (!hasConfiguredAnime) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-20 text-center space-y-6">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-[#6366f1]/10 border border-[#6366f1]/30 text-[#818cf8] shadow-xl shadow-[#6366f1]/10 animate-bounce">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-[#E50914]/10 border border-[#E50914]/30 text-[#ff2a34] shadow-xl shadow-[#E50914]/10 animate-bounce">
           <IconPlay width={32} height={32} />
         </div>
         <div className="space-y-2">
@@ -77,14 +76,14 @@ function Index() {
             No Stream Links Added Yet
           </h1>
           <p className="text-sm text-[#94a3b8] max-w-md mx-auto">
-            Anime Hub India displays only stream-ready anime. Go to the Admin Panel to configure
-            video links for your favorite anime series.
+            CinePulse displays stream-ready titles. Go to the Admin Panel to configure video links
+            for your favorite movies and series.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <Link
             to="/data/admin"
-            className="rounded-2xl bg-[#6366f1] px-6 py-3 text-xs sm:text-sm font-bold text-white hover:bg-[#4f46e5] transition shadow-lg shadow-[#6366f1]/30"
+            className="rounded-2xl bg-[#E50914] px-6 py-3 text-xs sm:text-sm font-bold text-white hover:bg-[#b80710] transition shadow-lg shadow-[#E50914]/30"
           >
             Open Admin Panel to Add Links
           </Link>
@@ -106,9 +105,7 @@ function Index() {
     <>
       {data.hero && data.hero.length > 0 && <Hero items={data.hero} />}
 
-      <div className="relative z-10 -mt-20 space-y-4 md:-mt-28 md:space-y-6">
-        <ContinueWatchingRow />
-
+      <div className="relative z-10 mt-6 sm:mt-8 space-y-6 md:space-y-8 pb-12">
         {data.trending && data.trending.length > 0 && (
           <Row
             title="Trending Now"
@@ -123,7 +120,7 @@ function Index() {
 
         {data.popular && data.popular.length > 0 && (
           <Row
-            title="Popular Anime"
+            title="Popular Movies & Series"
             items={data.popular}
             action={
               <Link to="/popular" className="text-xs font-semibold text-primary hover:underline">

@@ -8,15 +8,17 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/browse")({
   head: () => ({
     meta: [
-      { title: "Browse All Anime — Anime Hub India" },
+      { title: "Browse Catalog — CinePulse" },
       {
         name: "description",
-        content: "Browse anime by popularity, rating, trend or latest releases on Anime Hub India.",
+        content:
+          "Browse movies, series, and anime by popularity, rating, trend or latest releases on CinePulse.",
       },
-      { property: "og:title", content: "Browse All Anime — Anime Hub India" },
+      { property: "og:title", content: "Browse Catalog — CinePulse" },
       {
         property: "og:description",
-        content: "Browse anime by popularity, rating, trend or latest releases on Anime Hub India.",
+        content:
+          "Browse movies, series, and anime by popularity, rating, trend or latest releases on CinePulse.",
       },
     ],
   }),
@@ -51,7 +53,7 @@ function BrowsePage() {
           className={cn(
             "rounded-xl px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-center whitespace-nowrap transition-all duration-200 cursor-pointer",
             tab === t.key
-              ? "bg-[#6366f1] text-white shadow-md shadow-[#6366f1]/30 font-bold"
+              ? "bg-[#E50914] text-white shadow-md shadow-[#E50914]/30 font-bold"
               : "text-[#94a3b8] hover:text-white hover:bg-white/[0.05]",
           )}
         >
@@ -66,8 +68,8 @@ function BrowsePage() {
       queryKey={`browse-${tab}`}
       fetchPage={fetchPage}
       eyebrow="Browse"
-      title="All Anime"
-      description="Every series in the catalogue, sorted the way you like it."
+      title="Browse Catalogue"
+      description="All movies, web series, and anime in the catalogue, sorted your way."
       actions={tabsBar}
     />
   );

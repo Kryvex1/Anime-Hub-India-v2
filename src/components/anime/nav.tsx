@@ -2,6 +2,8 @@ import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { useWatchHistory } from "@/lib/watch-history";
+import { ProfileDrawer } from "./profile-drawer";
 
 import {
   IconAnime,
@@ -11,7 +13,6 @@ import {
   IconPopular,
   IconProfile,
   IconSearch,
-  IconSettings,
   IconTrending,
 } from "./icons";
 
@@ -22,35 +23,34 @@ const LINKS = [
   { to: "/browse", label: "Browse", Icon: IconAnime },
   { to: "/trending", label: "Trending", Icon: IconTrending },
   { to: "/popular", label: "Popular", Icon: IconPopular },
-  { to: "/watchlist", label: "Watchlist", Icon: IconBookmark },
+  { to: "/watchlist", label: "Library", Icon: IconBookmark },
 ] as const;
 
 const MOBILE = [
   { to: "/", label: "Home", Icon: IconHome, exact: true },
   { to: "/browse", label: "Browse", Icon: IconAnime },
   { to: "/search", label: "Search", Icon: IconSearch },
-  { to: "/watchlist", label: "Watchlist", Icon: IconBookmark },
+  { to: "/watchlist", label: "Library", Icon: IconBookmark },
 ] as const;
 
 export function Logo({ className, compact = false }: { className?: string; compact?: boolean }) {
-  const [failed, setFailed] = useState(false);
   return (
-    <span className={cn("flex items-center gap-1.5", className)}>
-      {failed ? (
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-[#6366f1] to-[#818cf8] text-xs font-black text-white shadow-md shadow-[#6366f1]/25">
-          AH
+    <span className={cn("flex items-center gap-2 select-none group", className)}>
+      <span className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-[#E50914] via-[#b80710] to-[#f97316] p-0.5 shadow-lg shadow-[#E50914]/25 transition-transform duration-300 group-hover:scale-105">
+        <span className="flex h-full w-full items-center justify-center rounded-[10px] bg-[#141414]/95 backdrop-blur-xs">
+          <span className="text-xs sm:text-sm font-black tracking-tighter text-white">CP</span>
         </span>
-      ) : (
-        <img
-          src={LOGO_SRC}
-          alt="Anime Hub India logo"
-          onError={() => setFailed(true)}
-          className={cn(
-            "h-7 sm:h-8 md:h-9 w-auto object-contain drop-shadow-[0_2px_10px_rgba(99,102,241,0.3)] transition-all duration-200",
-            compact ? "max-w-[100px] h-6" : "max-w-[140px] sm:max-w-[180px]",
-          )}
-        />
-      )}
+      </span>
+      <div className="flex flex-col">
+        <span className="text-base sm:text-lg font-black tracking-tight text-white leading-none">
+          Cine<span className="text-[#E50914]">Pulse</span>
+        </span>
+        {!compact && (
+          <span className="text-[9px] font-bold text-neutral-400 tracking-wider uppercase leading-none mt-0.5">
+            Movies · Series · Anime
+          </span>
+        )}
+      </div>
     </span>
   );
 }
@@ -59,6 +59,8 @@ export function Header() {
   const router = useRouter();
   const navigate = useNavigate();
   const pathname = router.state.location.pathname;
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const { history } = useWatchHistory();
 
   // Do not show header on search, watchlist, admin panel, or watch player page
   if (
@@ -84,7 +86,7 @@ export function Header() {
             <Logo compact />
           </Link>
 
-          {/* Right Side Group: Search Pill, Profile & Settings */}
+          {/* Right Side Group: Search Pill & Profile */}
           <div className="flex items-center gap-1.5">
             <Link
               to="/search"
@@ -94,25 +96,18 @@ export function Header() {
               <span className="font-medium text-[#cbd5e1]">Search</span>
             </Link>
 
-            <Link
-              to="/settings"
-              aria-label="Settings"
-              className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.08] border border-white/[0.1] text-[#94a3b8] transition-transform active:scale-90 hover:text-white hover:rotate-45"
-            >
-              <IconSettings width={13} height={13} />
-            </Link>
-
-            <Link
-              to="/watchlist"
-              aria-label="Watchlist & Profile"
-              className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white shadow-md shadow-[var(--brand-primary)]/40 transition-transform active:scale-90 border border-white/20"
-              style={{
-                background: "var(--brand-gradient, var(--brand-primary))",
-                boxShadow: "0 0 12px rgba(var(--brand-rgb), 0.45)",
-              }}
+            {/* Profile Button: Opens Profile & Continue Watching Drawer */}
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(true)}
+              aria-label="Profile and Continue Watching"
+              className="relative shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.12] hover:bg-white/[0.2] text-white border border-white/20 transition-all active:scale-90 cursor-pointer shadow-sm"
             >
               <IconProfile width={14} height={14} />
-            </Link>
+              {history.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-black" />
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -157,25 +152,19 @@ export function Header() {
                 Search<span className="hidden xl:inline"> anime</span>
               </span>
             </button>
-            <Link
-              to="/watchlist"
-              aria-label="Profile"
-              className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand-primary)] text-white transition-transform hover:scale-110 shadow-sm"
-              style={{
-                background: "var(--brand-gradient, var(--brand-primary))",
-                boxShadow: "0 0 14px rgba(var(--brand-rgb), 0.4)",
-              }}
+
+            {/* Desktop Profile Icon: Opens Profile & Continue Watching Drawer */}
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(true)}
+              aria-label="Profile and Continue Watching"
+              className="relative shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.08] hover:bg-white/[0.16] border border-white/15 text-white transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
             >
               <IconProfile width={15} height={15} />
-            </Link>
-            <Link
-              to="/settings"
-              aria-label="Settings"
-              activeProps={{ className: "text-white bg-white/20 ring-1 ring-white/30 rotate-45" }}
-              className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.05] border border-white/[0.08] text-[#94a3b8] transition-all hover:rotate-45 hover:text-white backdrop-blur-md cursor-pointer"
-            >
-              <IconSettings width={15} height={15} />
-            </Link>
+              {history.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-black" />
+              )}
+            </button>
           </div>
         </nav>
         {/* Soft gradient bottom fade border */}
@@ -187,6 +176,9 @@ export function Header() {
           }}
         />
       </header>
+
+      {/* Profile & Continue Watching Slide-over Drawer */}
+      <ProfileDrawer isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </>
   );
 }

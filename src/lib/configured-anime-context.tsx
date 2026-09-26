@@ -1,9 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import {
-  getStoredConfiguredAnimeIds,
-  subscribeConfiguredAnimeIds,
-  fetchConfiguredAnimeIds,
-} from "./episodes.firebase";
+import { createContext, useContext, type ReactNode } from "react";
 
 type ConfiguredAnimeContextType = {
   configuredIds: Set<number>;
@@ -13,39 +8,19 @@ type ConfiguredAnimeContextType = {
 
 const ConfiguredAnimeContext = createContext<ConfiguredAnimeContextType>({
   configuredIds: new Set(),
-  hasLink: () => false,
+  hasLink: () => true,
   refreshConfiguredIds: async () => {},
 });
 
 export function ConfiguredAnimeProvider({ children }: { children: ReactNode }) {
-  // Synchronous instant initialization from localStorage (0ms delay)
-  const [configuredIds, setConfiguredIds] = useState<Set<number>>(() => {
-    const stored = getStoredConfiguredAnimeIds();
-    return new Set(stored);
-  });
-
-  useEffect(() => {
-    // Realtime Firestore snapshot listener: instantly updates and syncs
-    const unsubscribe = subscribeConfiguredAnimeIds((ids) => {
-      setConfiguredIds(new Set(ids));
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  const hasLink = (id: number) => configuredIds.has(Number(id));
+  const hasLink = (_id: number) => true;
 
   return (
     <ConfiguredAnimeContext.Provider
       value={{
-        configuredIds,
+        configuredIds: new Set(),
         hasLink,
-        refreshConfiguredIds: async () => {
-          const ids = await fetchConfiguredAnimeIds(true);
-          setConfiguredIds(new Set(ids));
-        },
+        refreshConfiguredIds: async () => {},
       }}
     >
       {children}

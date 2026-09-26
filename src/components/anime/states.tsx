@@ -28,8 +28,8 @@ export function ErrorState({
 }
 
 export function EmptyState({
-  title = "No Anime Found",
-  hint = "No anime available in this section yet.",
+  title = "No Titles Found",
+  hint = "No content available in this section yet.",
   showExplore = true,
 }: {
   title?: string;
@@ -39,8 +39,8 @@ export function EmptyState({
   return (
     <div className="fade-up mx-auto my-16 flex max-w-md flex-col items-center gap-4 rounded-3xl bg-[#111622]/80 border border-white/[0.08] p-8 text-center backdrop-blur-xl shadow-2xl shadow-black/60">
       <div className="relative flex items-center justify-center">
-        <div className="absolute -inset-2 rounded-full bg-[#6366f1]/20 blur-xl animate-pulse" />
-        <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 text-[#818cf8]">
+        <div className="absolute -inset-2 rounded-full bg-[#E50914]/20 blur-xl animate-pulse" />
+        <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 text-[#ff2a34]">
           <IconSad width={32} height={32} />
         </span>
       </div>
@@ -52,9 +52,9 @@ export function EmptyState({
         <div className="mt-2 flex flex-wrap gap-2.5 justify-center">
           <Link
             to="/browse"
-            className="rounded-full bg-[#6366f1] hover:bg-[#4f46e5] px-5 py-2 text-xs font-semibold text-white transition active:scale-95 shadow-lg shadow-[#6366f1]/30"
+            className="rounded-full bg-[#E50914] hover:bg-[#b80710] px-5 py-2 text-xs font-semibold text-white transition active:scale-95 shadow-lg shadow-[#E50914]/30"
           >
-            Browse Anime
+            Browse Catalog
           </Link>
           <Link
             to="/"

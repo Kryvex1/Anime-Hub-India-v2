@@ -9,6 +9,7 @@ export interface WatchHistoryItem {
   poster?: string | null;
   backdrop?: string | null;
   type?: "TV" | "Movie" | "Series";
+  category?: "anime" | "movie" | "webseries";
   updatedAt: number;
 }
 
@@ -43,31 +44,40 @@ function writeHistory(items: WatchHistoryItem[]) {
   }
 }
 
-/** Record or update watch history for an anime episode */
+/** Record or update watch history for a movie, series, or anime episode */
 export function recordWatchHistory(entry: {
   animeId: number;
-  animeTitle: string;
-  season: number;
-  episode: number;
+  animeTitle?: string;
+  title?: string;
+  season?: number;
+  seasonNumber?: number;
+  episode?: number;
+  episodeNumber?: number;
   episodeTitle?: string;
   poster?: string | null;
   backdrop?: string | null;
   type?: "TV" | "Movie" | "Series";
+  isMovie?: boolean;
+  category?: "anime" | "movie" | "webseries";
 }) {
   if (!entry.animeId || !Number.isFinite(entry.animeId)) return;
 
   const current = readHistory();
   const filtered = current.filter((item) => item.animeId !== entry.animeId);
 
+  const isMovie = entry.isMovie || entry.type === "Movie";
+  const cat = entry.category || (isMovie ? "movie" : "webseries");
+
   const newItem: WatchHistoryItem = {
     animeId: entry.animeId,
-    animeTitle: entry.animeTitle || "Anime",
-    season: entry.season || 1,
-    episode: entry.episode || 1,
-    episodeTitle: entry.episodeTitle || "",
+    animeTitle: entry.animeTitle || entry.title || "Untitled",
+    season: entry.season ?? entry.seasonNumber ?? 1,
+    episode: entry.episode ?? entry.episodeNumber ?? 1,
+    episodeTitle: entry.episodeTitle || (isMovie ? "Full Movie" : ""),
     poster: entry.poster || null,
     backdrop: entry.backdrop || null,
-    type: entry.type || "TV",
+    type: isMovie ? "Movie" : entry.type || "Series",
+    category: cat,
     updatedAt: Date.now(),
   };
 
