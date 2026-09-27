@@ -6,15 +6,15 @@ import { fetchPopular } from "@/lib/anime.functions";
 export const Route = createFileRoute("/popular")({
   head: () => ({
     meta: [
-      { title: "Popular Titles — CinePulse" },
+      { title: "Popular Titles — 7Shows" },
       {
         name: "description",
-        content: "Browse the most popular movies and series of all time on CinePulse.",
+        content: "Browse the most popular movies and series of all time on 7Shows.",
       },
-      { property: "og:title", content: "Popular Titles — CinePulse" },
+      { property: "og:title", content: "Popular Titles — 7Shows" },
       {
         property: "og:description",
-        content: "Browse the most popular movies and series of all time on CinePulse.",
+        content: "Browse the most popular movies and series of all time on 7Shows.",
       },
     ],
   }),

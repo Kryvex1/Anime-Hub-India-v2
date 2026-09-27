@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { Logo } from "./nav";
 import {
   IconAnime,
@@ -14,7 +14,18 @@ import {
 } from "./icons";
 
 export function Footer() {
+  const router = useRouter();
+  const pathname = router.state.location.pathname;
   const [modalContent, setModalContent] = useState<"dmca" | "terms" | "privacy" | null>(null);
+
+  if (
+    pathname.startsWith("/watchlist") ||
+    pathname.startsWith("/library") ||
+    pathname.startsWith("/history") ||
+    pathname.includes("/watch")
+  ) {
+    return null;
+  }
 
   return (
     <footer className="relative mt-6 sm:mt-10 border-t border-white/[0.08] bg-[#070A12]/95 pt-10 pb-20 text-xs backdrop-blur-xl lg:pb-12 text-[#94a3b8]">
@@ -29,10 +40,9 @@ export function Footer() {
               <Logo className="scale-100" />
             </Link>
             <p className="max-w-md text-xs leading-relaxed text-[#94a3b8]">
-              <strong className="text-[#f1f5f9]">CinePulse</strong> is your ultimate platform for
-              movies, series, and anime streaming, exploration, and watchlist management. Experience
-              high-speed CDN streaming, multi-audio playback including Hindi dub, curated
-              collections, and comprehensive episode guides.
+              <strong className="text-[#f1f5f9]">7Shows</strong> is your premier global platform for
+              movies, TV series, and anime streaming, discovery, and watchlist management. Enjoy
+              fast CDN streaming, curated collections, and comprehensive episode guides.
             </p>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -141,8 +151,8 @@ export function Footer() {
               DMCA Disclaimer
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-[#94a3b8]">
-              CinePulse does not host or store media files on its servers. All streams and content
-              are linked through third-party services.
+              7Shows does not host or store media files on its servers. All streams and content are
+              linked through third-party services.
             </p>
             <button
               onClick={() => setModalContent("dmca")}
@@ -157,7 +167,7 @@ export function Footer() {
         <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-white/[0.08] pt-6 text-center sm:flex-row sm:text-left">
           <p className="text-[11px] text-[#94a3b8]">
             © {new Date().getFullYear()}{" "}
-            <span className="font-semibold text-[#f1f5f9]">CinePulse</span>. All rights reserved.
+            <span className="font-semibold text-[#f1f5f9]">7Shows</span>. All rights reserved.
           </p>
 
           <div className="flex items-center gap-5 text-[11px] text-[#94a3b8]">
@@ -218,14 +228,14 @@ export function Footer() {
 
                 <div className="space-y-3 text-xs leading-relaxed text-[#94a3b8] pt-2">
                   <p>
-                    <strong className="text-white">CinePulse</strong> operates as an index and media
+                    <strong className="text-white">7Shows</strong> operates as an index and media
                     discovery search engine. None of the video files, multimedia streams, or
                     copyrighted materials are hosted, stored, uploaded, or transmitted on our own
                     servers.
                   </p>
                   <p>
                     All video links, iframes, and embeds displayed on this platform are provided by
-                    independent, third-party internet streaming providers. CinePulse has no control
+                    independent, third-party internet streaming providers. 7Shows has no control
                     over the copyright compliance, legality, or hosting of content hosted on
                     third-party servers.
                   </p>
@@ -236,7 +246,7 @@ export function Footer() {
                     source file is removed.
                   </p>
                   <p>
-                    To request the removal of a specific indexing reference from CinePulse, please
+                    To request the removal of a specific indexing reference from 7Shows, please
                     provide verifiable proof of ownership and the exact URL link.
                   </p>
                 </div>
@@ -248,7 +258,7 @@ export function Footer() {
                 <h3 className="text-lg font-bold text-white">Terms of Service</h3>
                 <div className="space-y-3 text-xs leading-relaxed text-[#94a3b8]">
                   <p>
-                    By accessing or using CinePulse, you agree to comply with and be bound by these
+                    By accessing or using 7Shows, you agree to comply with and be bound by these
                     Terms of Service. If you do not agree to these terms, please do not use the
                     website.
                   </p>
@@ -271,8 +281,8 @@ export function Footer() {
                 <h3 className="text-lg font-bold text-white">Privacy Policy</h3>
                 <div className="space-y-3 text-xs leading-relaxed text-[#94a3b8]">
                   <p>
-                    Your privacy is important to us. CinePulse respects your personal information
-                    and is committed to protecting it.
+                    Your privacy is important to us. 7Shows respects your personal information and
+                    is committed to protecting it.
                   </p>
                   <p>
                     We do not collect or sell your personal information. Watchlists and playback

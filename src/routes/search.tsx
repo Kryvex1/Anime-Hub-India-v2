@@ -10,16 +10,15 @@ import { fetchPopular, fetchSearch } from "@/lib/anime.functions";
 export const Route = createFileRoute("/search")({
   head: () => ({
     meta: [
-      { title: "Search Movies, Series & Anime — CinePulse" },
+      { title: "Search Movies, Series & Anime — 7Shows" },
       {
         name: "description",
-        content:
-          "Search thousands of movies, TV series, and anime in Multi-Audio and Hindi dub on CinePulse.",
+        content: "Search thousands of movies, TV series, and anime on 7Shows.",
       },
-      { property: "og:title", content: "Search Movies, Series & Anime — CinePulse" },
+      { property: "og:title", content: "Search Movies, Series & Anime — 7Shows" },
       {
         property: "og:description",
-        content: "Search thousands of movies, TV series, and anime on CinePulse.",
+        content: "Search thousands of movies, TV series, and anime on 7Shows.",
       },
     ],
   }),

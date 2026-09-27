@@ -1,6 +1,6 @@
 {
-  "name": "CinePulse",
-  "description": "Stream trending movies, web series, and anime with fast HD multi-audio playback and Hindi dub on CinePulse.",
+  "name": "7Shows",
+  "description": "Discover and stream trending movies, TV series, and anime with instant HD playback on 7Shows.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

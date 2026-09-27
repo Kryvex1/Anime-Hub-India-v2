@@ -22,7 +22,7 @@ export function TelegramBanner() {
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-[#94a3b8]">
-                Get new episode alerts, Hindi dub drops, and direct links instantly.
+                Get instant notifications for new releases, trending titles, and site updates.
               </p>
             </div>
           </div>

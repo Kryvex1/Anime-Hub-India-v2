@@ -8,17 +8,17 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/browse")({
   head: () => ({
     meta: [
-      { title: "Browse Catalog — CinePulse" },
+      { title: "Browse Catalog — 7Shows" },
       {
         name: "description",
         content:
-          "Browse movies, series, and anime by popularity, rating, trend or latest releases on CinePulse.",
+          "Browse movies, series, and anime by popularity, rating, trend or latest releases on 7Shows.",
       },
-      { property: "og:title", content: "Browse Catalog — CinePulse" },
+      { property: "og:title", content: "Browse Catalog — 7Shows" },
       {
         property: "og:description",
         content:
-          "Browse movies, series, and anime by popularity, rating, trend or latest releases on CinePulse.",
+          "Browse movies, series, and anime by popularity, rating, trend or latest releases on 7Shows.",
       },
     ],
   }),

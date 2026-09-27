@@ -209,7 +209,7 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
       if (navigator.share) {
         await navigator.share({
           title: data.title,
-          text: `Watch ${data.title} on CinePulse`,
+          text: `Watch ${data.title} on 7Shows`,
           url,
         });
       } else {
@@ -265,7 +265,13 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="rounded-md bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-black text-emerald-400 uppercase tracking-wider">
-                {isMovie ? "Anime Movie" : "Anime Series"}
+                {getMediaCategory(data.id, data) === "anime"
+                  ? isMovie
+                    ? "Anime Movie"
+                    : "Anime"
+                  : isMovie
+                    ? "Movie"
+                    : "Series"}
               </span>
             </div>
 
