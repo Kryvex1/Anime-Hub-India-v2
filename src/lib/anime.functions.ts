@@ -271,3 +271,12 @@ export async function fetchPerson({ data }: { data: { id: number } }) {
   const { fetchPersonDetailsAndWorks } = await import("./tmdb");
   return fetchPersonDetailsAndWorks(data.id);
 }
+
+export async function fetchSmartRecommendations({
+  data,
+}: {
+  data: { topItemId: number; isMovie: boolean };
+}) {
+  const { fetchSmartSearchRecommendations } = await import("./tmdb");
+  return fetchSmartSearchRecommendations(data.topItemId, data.isMovie);
+}

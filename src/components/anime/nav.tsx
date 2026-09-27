@@ -1,20 +1,8 @@
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
 
 import { cn } from "@/lib/utils";
-import { useWatchHistory } from "@/lib/watch-history";
-import { ProfileDrawer } from "./profile-drawer";
 
-import {
-  IconAnime,
-  IconBookmark,
-  IconGenres,
-  IconHome,
-  IconPopular,
-  IconProfile,
-  IconSearch,
-  IconTrending,
-} from "./icons";
+import { IconAnime, IconHome, IconPopular, IconSearch, IconTrending } from "./icons";
 
 export const LOGO_SRC = "https://imgh.in/host/vylifk";
 
@@ -23,14 +11,13 @@ const LINKS = [
   { to: "/browse", label: "Browse", Icon: IconAnime },
   { to: "/trending", label: "Trending", Icon: IconTrending },
   { to: "/popular", label: "Popular", Icon: IconPopular },
-  { to: "/watchlist", label: "Library", Icon: IconBookmark },
 ] as const;
 
 const MOBILE = [
   { to: "/", label: "Home", Icon: IconHome, exact: true },
   { to: "/browse", label: "Browse", Icon: IconAnime },
+  { to: "/trending", label: "Trending", Icon: IconTrending },
   { to: "/search", label: "Search", Icon: IconSearch },
-  { to: "/watchlist", label: "Library", Icon: IconBookmark },
 ] as const;
 
 export function Logo({ className, compact = false }: { className?: string; compact?: boolean }) {
@@ -60,13 +47,8 @@ export function Header() {
   const navigate = useNavigate();
   const pathname = router.state.location.pathname;
 
-  // Do not show header on search, watchlist, admin panel, or watch player page
-  if (
-    pathname === "/search" ||
-    pathname.startsWith("/watchlist") ||
-    pathname.startsWith("/data/admin") ||
-    pathname.includes("/watch")
-  ) {
+  // Do not show header on search, admin panel, or watch player page
+  if (pathname === "/search" || pathname.startsWith("/data/admin") || pathname.includes("/watch")) {
     return null;
   }
 
@@ -84,25 +66,14 @@ export function Header() {
             <Logo compact />
           </Link>
 
-          {/* Right Side Group: Search Pill & Profile */}
-          <div className="flex items-center gap-1.5">
-            <Link
-              to="/search"
-              className="flex items-center gap-1.5 h-7 rounded-full bg-white/[0.08] border border-white/[0.1] px-2.5 text-[11px] text-[#94a3b8] transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 cursor-pointer shadow-inner"
-            >
-              <IconSearch width={13} height={13} className="text-[var(--brand-glow)] shrink-0" />
-              <span className="font-medium text-[#cbd5e1]">Search</span>
-            </Link>
-
-            {/* Profile Button: Navigates directly to Library / Watchlist */}
-            <Link
-              to="/watchlist"
-              aria-label="My Library & Watchlist"
-              className="relative shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.12] hover:bg-white/[0.2] text-white border border-white/20 transition-all active:scale-90 cursor-pointer shadow-sm"
-            >
-              <IconProfile width={14} height={14} />
-            </Link>
-          </div>
+          {/* Right: Search Pill */}
+          <Link
+            to="/search"
+            className="flex items-center gap-1.5 h-7 rounded-full bg-white/[0.08] border border-white/[0.1] px-3 text-[11px] text-[#94a3b8] transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 cursor-pointer shadow-inner"
+          >
+            <IconSearch width={13} height={13} className="text-[var(--brand-glow)] shrink-0" />
+            <span className="font-medium text-[#cbd5e1]">Search</span>
+          </Link>
         </div>
       </div>
 
@@ -134,25 +105,16 @@ export function Header() {
             ))}
           </ul>
 
-          {/* Search & Actions */}
+          {/* Search Action */}
           <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
             <button
               onClick={() => navigate({ to: "/search" })}
               aria-label="Search shows"
-              className="flex items-center gap-1.5 lg:gap-2 rounded-full bg-white/[0.05] border border-white/[0.08] px-3 py-1.5 text-xs text-[#94a3b8] transition-all hover:bg-white/[0.1] hover:text-white active:scale-95 cursor-pointer backdrop-blur-md shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1.5 lg:gap-2 rounded-full bg-white/[0.05] border border-white/[0.08] px-3.5 py-1.5 text-xs text-[#94a3b8] transition-all hover:bg-white/[0.1] hover:text-white active:scale-95 cursor-pointer backdrop-blur-md shrink-0 whitespace-nowrap"
             >
               <IconSearch width={14} height={14} className="text-[var(--brand-glow)] shrink-0" />
               <span className="text-xs whitespace-nowrap">Search titles</span>
             </button>
-
-            {/* Desktop Profile Icon: Navigates directly to Library / Watchlist */}
-            <Link
-              to="/watchlist"
-              aria-label="My Library & Watchlist"
-              className="relative shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.08] hover:bg-white/[0.16] border border-white/15 text-white transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
-            >
-              <IconProfile width={15} height={15} />
-            </Link>
           </div>
         </nav>
         {/* Soft gradient bottom fade border */}

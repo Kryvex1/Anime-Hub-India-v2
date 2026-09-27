@@ -12,17 +12,17 @@ import { useAppSettings } from "@/lib/settings";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "CinePulse — Watch Movies, Series & Anime in HD" },
+      { title: "7Shows — Watch Movies, Series & Anime in HD" },
       {
         name: "description",
         content:
-          "CinePulse: Discover trending, popular movies, web series, and anime with fast HD multi-audio streaming.",
+          "7Shows: Discover trending, popular movies, web series, and anime with fast HD multi-audio streaming.",
       },
-      { property: "og:title", content: "CinePulse — Watch Movies, Series & Anime in HD" },
+      { property: "og:title", content: "7Shows — Watch Movies, Series & Anime in HD" },
       {
         property: "og:description",
         content:
-          "CinePulse: Discover trending, popular movies, web series, and anime with fast HD multi-audio streaming.",
+          "7Shows: Discover trending, popular movies, web series, and anime with fast HD multi-audio streaming.",
       },
     ],
   }),

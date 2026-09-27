@@ -4,7 +4,6 @@ import { useEffect } from "react";
 
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BottomNav, Header } from "../components/anime/nav";
-import { Footer } from "../components/anime/footer";
 import { Toaster } from "../components/ui/sonner";
 import { ConfiguredAnimeProvider } from "../lib/configured-anime-context";
 import { applyThemeToDOM, loadStoredSettings } from "../lib/settings";
@@ -95,7 +94,6 @@ function RootComponent() {
         <main className="min-h-screen pb-20 md:pb-0">
           <Outlet />
         </main>
-        <Footer />
         <BottomNav />
         <Toaster position="top-center" />
       </ConfiguredAnimeProvider>

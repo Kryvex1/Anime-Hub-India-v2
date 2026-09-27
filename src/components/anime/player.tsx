@@ -14,6 +14,8 @@ import {
   Server,
   AlertCircle,
   AlertTriangle,
+  HelpCircle,
+  X,
 } from "lucide-react";
 import { fetchShow, fetchSeason } from "@/lib/anime.functions";
 import { getKnownCard, type ShowDetails } from "@/lib/tmdb";
@@ -133,6 +135,31 @@ export function AnimePlayer({
   const [iframeKey, setIframeKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<SelectedPerson | null>(null);
+  const [showServerTip, setShowServerTip] = useState(() => {
+    try {
+      return localStorage.getItem("7shows_hide_server_tip") !== "1";
+    } catch {
+      return true;
+    }
+  });
+
+  const handleDismissTip = () => {
+    setShowServerTip(false);
+    try {
+      localStorage.setItem("7shows_hide_server_tip", "1");
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleOpenTip = () => {
+    setShowServerTip(true);
+    try {
+      localStorage.removeItem("7shows_hide_server_tip");
+    } catch {
+      // ignore
+    }
+  };
 
   // Sync state if initial props change
   useEffect(() => {
@@ -229,15 +256,25 @@ export function AnimePlayer({
     return seasonData?.episodes ?? [];
   }, [seasonData?.episodes, isMovie]);
 
-  // Stagger animation for episode selector
+  const [playerEpLimit, setPlayerEpLimit] = useState(32);
+
+  useEffect(() => {
+    setPlayerEpLimit(32);
+  }, [currentSeasonNum]);
+
+  const renderedPlayerEpisodes = useMemo(() => {
+    return visibleEpisodes.slice(0, playerEpLimit);
+  }, [visibleEpisodes, playerEpLimit]);
+
+  // Initial animation on season change
   useEffect(() => {
     if (epGridRef.current && visibleEpisodes.length > 0) {
       const cards = epGridRef.current.querySelectorAll<HTMLElement>(".player-ep-card");
       if (cards.length > 0) {
-        animateCardStagger(Array.from(cards));
+        animateCardStagger(Array.from(cards).slice(0, 18));
       }
     }
-  }, [visibleEpisodes, currentSeasonNum]);
+  }, [currentSeasonNum]);
 
   // Current Episode Metadata
   const currentEpisode = isMovie
@@ -301,13 +338,15 @@ export function AnimePlayer({
     [selectedServer],
   );
 
-  // Automatic timeout fallback: If stream takes more than 11 seconds to load, try next server
+  // Automatic timeout fallback: If stream takes more than 7.5 seconds to load, try next server automatically
   useEffect(() => {
     const timer = setTimeout(() => {
       if (loaderVisible && !allServersFailed) {
-        switchToNextServer(`Server "${selectedServer.name}" response slow. Trying next server...`);
+        switchToNextServer(
+          `Server "${selectedServer.name}" response slow. Automatically switched to next server...`,
+        );
       }
-    }, 11000);
+    }, 7500);
 
     return () => clearTimeout(timer);
   }, [selectedServer.id, selectedServer.name, loaderVisible, allServersFailed, switchToNextServer]);
@@ -483,7 +522,7 @@ export function AnimePlayer({
       if (navigator.share) {
         await navigator.share({
           title: showTitle,
-          text: `Watch ${showTitle} in Full HD on CinePulse`,
+          text: `Watch ${showTitle} in Full HD on 7Shows`,
           url: window.location.href,
         });
       } else {
@@ -704,6 +743,11 @@ export function AnimePlayer({
                   id="videoFrame"
                   src={currentStreamUrl}
                   onLoad={handleIframeLoad}
+                  onError={() =>
+                    switchToNextServer(
+                      `Server ${selectedServer.name} connection error. Automatically switched to next server.`,
+                    )
+                  }
                   referrerPolicy="no-referrer"
                   scrolling="no"
                   allow="encrypted-media; autoplay *; fullscreen *"
@@ -764,28 +808,6 @@ export function AnimePlayer({
 
           {/* Quick Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-end lg:self-auto">
-            {anime && (
-              <button
-                type="button"
-                onClick={() => toggle(anime.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer ${
-                  isSavedInWatchlist
-                    ? "bg-[#E50914]/20 text-[#ff4d55] border border-[#E50914]/40"
-                    : "bg-white/[0.06] text-neutral-300 hover:text-white hover:bg-white/10 border border-white/[0.06]"
-                }`}
-                title="Watchlist"
-              >
-                <Bookmark
-                  width={13}
-                  height={13}
-                  className={isSavedInWatchlist ? "fill-current" : ""}
-                />
-                <span className="hidden sm:inline">
-                  {isSavedInWatchlist ? "In List" : "My List"}
-                </span>
-              </button>
-            )}
-
             <button
               type="button"
               onClick={handleShare}
@@ -835,6 +857,40 @@ export function AnimePlayer({
             </button>
           </div>
         </div>
+
+        {/* Collapsible Server Tip Box */}
+        {showServerTip ? (
+          <div className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-gradient-to-r from-sky-500/10 via-[#181818] to-transparent border border-sky-500/25 rounded-xl text-neutral-300 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sky-400">
+                <HelpCircle className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-[11px] sm:text-xs text-neutral-300">
+                <strong className="text-white font-semibold">
+                  Video not playing or buffering?
+                </strong>{" "}
+                Try switching to another server (Multi Server, Server 2, Server 3) above.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissTip}
+              className="shrink-0 text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+              title="Dismiss notice"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleOpenTip}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-400 hover:text-white transition cursor-pointer px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] self-start"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
+            <span>Server Playback Help</span>
+          </button>
+        )}
 
         {/* 4. PREV / NEXT BAR (ONLY FOR TV SERIES) */}
         {!isMovie && (
@@ -1008,69 +1064,96 @@ export function AnimePlayer({
             ) : (
               <div
                 ref={epGridRef}
-                className="grid gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-h-[600px] overflow-y-auto scrollbar-none no-scrollbar pr-0.5"
+                className="max-h-[600px] overflow-y-auto scrollbar-none no-scrollbar pr-0.5 space-y-3"
               >
-                {visibleEpisodes.map((ep) => {
-                  const isCurrent = ep.episodeNumber === currentEpisodeNum;
-                  return (
-                    <button
-                      key={ep.id}
-                      onClick={() => handleSwitchEpisode(currentSeasonNum, ep.episodeNumber)}
-                      className={`player-ep-card group relative flex items-start gap-3 rounded-xl p-2.5 text-left transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.98] ${
-                        isCurrent
-                          ? "bg-[#E50914]/15 border-2 border-[#E50914] shadow-lg shadow-[#E50914]/20"
-                          : "bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.07] hover:border-white/20"
-                      }`}
-                    >
-                      <div className="relative aspect-video w-24 sm:w-28 shrink-0 overflow-hidden rounded-lg bg-black shadow-sm">
-                        <Img
-                          src={img(ep.still, "w300")}
-                          alt={ep.name || `Episode ${ep.episodeNumber}`}
-                          rounded="rounded-lg"
-                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute top-1 left-1 rounded bg-black/80 backdrop-blur-xs px-1.5 py-0.5 text-[9px] font-bold text-white">
-                          EP {ep.episodeNumber}
-                        </div>
-                        {isCurrent && (
-                          <div className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-xs">
-                            <span className="grid h-6 w-6 place-items-center rounded-full bg-[#E50914] text-white shadow-md shadow-[#E50914]/50 animate-pulse">
-                              <IconPlay width={12} height={12} />
-                            </span>
+                <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {renderedPlayerEpisodes.map((ep) => {
+                    const isCurrent = ep.episodeNumber === currentEpisodeNum;
+                    return (
+                      <button
+                        key={ep.id}
+                        onClick={() => handleSwitchEpisode(currentSeasonNum, ep.episodeNumber)}
+                        style={{ contentVisibility: "auto", containIntrinsicSize: "0 80px" }}
+                        className={`player-ep-card group relative flex items-start gap-3 rounded-xl p-2.5 text-left transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.98] ${
+                          isCurrent
+                            ? "bg-[#E50914]/15 border-2 border-[#E50914] shadow-lg shadow-[#E50914]/20"
+                            : "bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.07] hover:border-white/20"
+                        }`}
+                      >
+                        <div className="relative aspect-video w-24 sm:w-28 shrink-0 overflow-hidden rounded-lg bg-black shadow-sm">
+                          <Img
+                            src={img(ep.still, "w300")}
+                            alt={ep.name || `Episode ${ep.episodeNumber}`}
+                            rounded="rounded-lg"
+                            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute top-1 left-1 rounded bg-black/80 backdrop-blur-xs px-1.5 py-0.5 text-[9px] font-bold text-white">
+                            EP {ep.episodeNumber}
                           </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1 flex flex-col justify-between h-full py-0.5 overflow-hidden">
-                        <div className="min-w-0 overflow-hidden">
-                          <p className="truncate text-xs font-bold text-white group-hover:text-[#ff4d55] transition break-words">
-                            {ep.name || `Episode ${ep.episodeNumber}`}
-                          </p>
-                          <p className="line-clamp-2 mt-0.5 text-[10px] text-neutral-400 break-words leading-tight">
-                            {ep.overview || "No synopsis available."}
-                          </p>
-                        </div>
-
-                        <div className="mt-1 flex items-center justify-between text-[10px] min-w-0 pt-0.5">
-                          <span className="text-neutral-400 font-medium shrink-0">
-                            Ep {ep.episodeNumber}
-                          </span>
-
-                          {ep.runtime && (
-                            <span className="text-neutral-400 shrink-0">{ep.runtime}m</span>
+                          {isCurrent && (
+                            <div className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-xs">
+                              <span className="grid h-6 w-6 place-items-center rounded-full bg-[#E50914] text-white shadow-md shadow-[#E50914]/50 animate-pulse">
+                                <IconPlay width={12} height={12} />
+                              </span>
+                            </div>
                           )}
                         </div>
-                      </div>
+
+                        <div className="min-w-0 flex-1 flex flex-col justify-between h-full py-0.5 overflow-hidden">
+                          <div className="min-w-0 overflow-hidden">
+                            <p className="truncate text-xs font-bold text-white group-hover:text-[#ff4d55] transition break-words">
+                              {ep.name || `Episode ${ep.episodeNumber}`}
+                            </p>
+                            <p className="line-clamp-2 mt-0.5 text-[10px] text-neutral-400 break-words leading-tight">
+                              {ep.overview || "No synopsis available."}
+                            </p>
+                          </div>
+
+                          <div className="mt-1 flex items-center justify-between text-[10px] min-w-0 pt-0.5">
+                            <span className="text-neutral-400 font-medium shrink-0">
+                              Ep {ep.episodeNumber}
+                            </span>
+
+                            {ep.runtime && (
+                              <span className="text-neutral-400 shrink-0">{ep.runtime}m</span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {visibleEpisodes.length > playerEpLimit && (
+                  <div className="pt-2 pb-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setPlayerEpLimit((prev) => prev + 32)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/10 px-4 py-2 text-xs font-bold text-white transition active:scale-95 cursor-pointer shadow-md"
+                    >
+                      <span>+ Load More ({visibleEpisodes.length - playerEpLimit} remaining)</span>
                     </button>
-                  );
-                })}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
         {/* 7. CAST & CREW SECTION (SIDE-SCROLLABLE) */}
-        {((anime?.cast && anime.cast.length > 0) || (anime?.crew && anime.crew.length > 0)) && (
+        {animePending && (!anime?.cast || anime.cast.length === 0) ? (
+          <div className="p-4 sm:p-5 bg-[#181818] border border-white/[0.08] rounded-xl space-y-3">
+            <div className="h-4 w-28 rounded bg-white/[0.08] shimmer" />
+            <div className="flex gap-4 overflow-x-auto pb-1">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2 shrink-0 w-20">
+                  <div className="h-16 w-16 rounded-full bg-white/[0.06] shimmer" />
+                  <div className="h-2.5 w-14 rounded bg-white/[0.05] shimmer" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (anime?.cast && anime.cast.length > 0) || (anime?.crew && anime.crew.length > 0) ? (
           <div className="p-4 sm:p-5 bg-[#181818] border border-white/[0.08] rounded-xl">
             <CastCrewSection
               cast={anime.cast}
@@ -1078,7 +1161,7 @@ export function AnimePlayer({
               onSelectPerson={setSelectedPerson}
             />
           </div>
-        )}
+        ) : null}
 
         {/* 8. RECOMMENDATIONS ROW */}
         {anime?.recommendations && anime.recommendations.length > 0 && (

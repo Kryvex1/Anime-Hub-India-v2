@@ -248,11 +248,37 @@ export async function tmdb<T>(path: string, params: Params = {}, signal?: AbortS
   }
 
   const execute = async (): Promise<T> => {
-    // Try 1: Direct TMDB API with active built-in pool key (Instant response, zero Vercel timeout)
+    // Try 1: Secure Server Proxy (Keeps API key 100% hidden on server side)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      if (signal && !signal.aborted) {
+        signal.addEventListener("abort", () => {
+          clearTimeout(timeoutId);
+          controller.abort();
+        });
+      }
+
+      const proxyUrl = `${PROXY_BASE}?${searchParams.toString()}`;
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = (await res.json()) as T;
+        memoryCache.set(cacheKey, { at: Date.now(), ttl, data });
+        saveToPersistentStorage(cacheKey, ttl, data);
+        return data;
+      }
+    } catch {
+      // Proxy failed or timed out — fall through to secure failover below
+    }
+
+    // Try 2: Direct TMDB failover with pool keys retry
     for (let i = 0; i < 3; i++) {
       try {
         const directController = new AbortController();
-        const directTimeoutId = setTimeout(() => directController.abort(), 6000);
+        const directTimeoutId = setTimeout(() => directController.abort(), 5000);
 
         if (signal) {
           if (signal.aborted) {
@@ -286,32 +312,6 @@ export async function tmdb<T>(path: string, params: Params = {}, signal?: AbortS
       } catch {
         // Retry next key in pool
       }
-    }
-
-    // Try 2: Server Proxy Failover
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-      if (signal && !signal.aborted) {
-        signal.addEventListener("abort", () => {
-          clearTimeout(timeoutId);
-          controller.abort();
-        });
-      }
-
-      const proxyUrl = `${PROXY_BASE}?${searchParams.toString()}`;
-      const res = await fetch(proxyUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = (await res.json()) as T;
-        memoryCache.set(cacheKey, { at: Date.now(), ttl, data });
-        saveToPersistentStorage(cacheKey, ttl, data);
-        return data;
-      }
-    } catch {
-      // Proxy failed or timed out
     }
 
     // Try 3: Last Resort — Return stale cache data if available instead of crashing!
@@ -793,9 +793,23 @@ export async function searchAnime(
       (a, b) => (b.popularity ?? 0) - (a.popularity ?? 0),
     );
 
+    const junkNewsTalkGenres = new Set([10763, 10767]); // News, Talk
+    const filteredRawList = rawList.filter((item) => {
+      if (!item || !item.id) return false;
+      const title = item.title || item.name;
+      if (!title || title.trim().length === 0) return false;
+      // Must have at least poster or backdrop
+      if (!item.poster_path && !item.backdrop_path) return false;
+      // Skip zero-vote ultra-low popularity junk
+      if ((item.vote_count ?? 0) === 0 && (item.popularity ?? 0) < 1.0) return false;
+      // Skip talk show / news
+      if (item.genre_ids?.some((g) => junkNewsTalkGenres.has(g))) return false;
+      return true;
+    });
+
     const seenIds = new Set<number>();
     const uniqueResults: CardItem[] = [];
-    for (const item of rawList) {
+    for (const item of filteredRawList) {
       if (item.id && !seenIds.has(item.id)) {
         seenIds.add(item.id);
         uniqueResults.push(toCard(item));
@@ -1315,4 +1329,97 @@ export async function fetchPersonDetailsAndWorks(
     knownForDepartment: person.known_for_department,
     works,
   };
+}
+
+export type SmartSearchRecommendations = {
+  similar: CardItem[];
+  director: {
+    id: number;
+    name: string;
+    works: CardItem[];
+  } | null;
+};
+
+export async function fetchSmartSearchRecommendations(
+  topItemId: number,
+  isMovie: boolean,
+): Promise<SmartSearchRecommendations> {
+  try {
+    const endpoint = isMovie ? `/movie/${topItemId}` : `/tv/${topItemId}`;
+    const [recsRes, similarRes, creditsRes] = await Promise.all([
+      tmdb<{ results: Show[] }>(`${endpoint}/recommendations`).catch(() => ({ results: [] })),
+      tmdb<{ results: Show[] }>(`${endpoint}/similar`).catch(() => ({ results: [] })),
+      tmdb<{
+        crew: { id: number; name: string; job?: string; profile_path?: string }[];
+      }>(`${endpoint}/credits`).catch(() => ({ crew: [] })),
+    ]);
+
+    // Combine & deduplicate similar titles
+    const seenIds = new Set<number>([topItemId]);
+    const similarCards: CardItem[] = [];
+
+    for (const item of [...(recsRes.results || []), ...(similarRes.results || [])]) {
+      if (
+        item.id &&
+        !seenIds.has(item.id) &&
+        (item.poster_path || item.backdrop_path) &&
+        (item.vote_count ?? 0) > 0
+      ) {
+        seenIds.add(item.id);
+        similarCards.push(toCard({ ...item, media_type: isMovie ? "movie" : "tv" }));
+        if (similarCards.length >= 12) break;
+      }
+    }
+
+    // Find Director or Creator
+    const director = creditsRes.crew?.find(
+      (c) => c.job === "Director" || c.job === "Executive Producer" || c.job === "Creator",
+    );
+
+    const directorWorks: CardItem[] = [];
+    if (director && director.id) {
+      try {
+        const personCredits = await tmdb<{
+          crew: (Show & { job?: string })[];
+          cast: Show[];
+        }>(`/person/${director.id}/combined_credits`);
+
+        const directed = (personCredits.crew || []).filter(
+          (s) =>
+            s.id &&
+            s.id !== topItemId &&
+            (s.job === "Director" || s.job === "Creator" || s.job === "Writer") &&
+            (s.poster_path || s.backdrop_path),
+        );
+
+        const seenWorkIds = new Set<number>([topItemId]);
+        for (const work of directed) {
+          if (!seenWorkIds.has(work.id)) {
+            seenWorkIds.add(work.id);
+            directorWorks.push(toCard(work));
+            if (directorWorks.length >= 10) break;
+          }
+        }
+      } catch {
+        // Ignore director fetch errors
+      }
+    }
+
+    return {
+      similar: similarCards,
+      director:
+        director && directorWorks.length > 0
+          ? {
+              id: director.id,
+              name: director.name,
+              works: directorWorks,
+            }
+          : null,
+    };
+  } catch {
+    return {
+      similar: [],
+      director: null,
+    };
+  }
 }

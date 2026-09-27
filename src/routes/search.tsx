@@ -1,11 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { IconClose, IconSearch, IconSparkles } from "@/components/anime/icons";
-import { Grid } from "@/components/anime/row";
+import { Grid, Row } from "@/components/anime/row";
 import { EmptyState, ErrorState } from "@/components/anime/states";
-import { fetchPopular, fetchSearch } from "@/lib/anime.functions";
+import {
+  fetchPopular,
+  fetchSearch,
+  fetchSmartRecommendations,
+  fetchTrending,
+} from "@/lib/anime.functions";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/search")({
   head: () => ({
@@ -25,19 +31,6 @@ export const Route = createFileRoute("/search")({
   component: SearchPage,
 });
 
-const SUGGESTIONS = [
-  "Solo Leveling",
-  "Demon Slayer",
-  "Jujutsu Kaisen",
-  "One Piece",
-  "Attack on Titan",
-  "Naruto",
-  "Bleach",
-  "Chainsaw Man",
-  "Death Note",
-  "Black Clover",
-];
-
 function SearchPage() {
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
@@ -56,7 +49,7 @@ function SearchPage() {
     return () => clearTimeout(t);
   }, [input]);
 
-  // Search Results Query
+  // Primary Search Results Query
   const { data, isFetching, isPending, isError, refetch } = useQuery({
     queryKey: ["search", query],
     queryFn: ({ signal }) => fetchSearch({ data: { q: query, page: 1, signal } }),
@@ -64,12 +57,50 @@ function SearchPage() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Recommended Anime Query when search is empty
+  // Top item from search results to derive intelligent contextual suggestions
+  const topItem = useMemo(() => {
+    return data?.items && data.items.length > 0 ? data.items[0] : null;
+  }, [data?.items]);
+
+  // Intelligent Contextual & Director Recommendations Query (YouTube/Netflix style algorithm)
+  const { data: smartRecs } = useQuery({
+    queryKey: ["search-smart-recs", topItem?.id, topItem?.isMovie],
+    queryFn: () =>
+      fetchSmartRecommendations({
+        data: { topItemId: topItem!.id, isMovie: Boolean(topItem!.isMovie) },
+      }),
+    enabled: Boolean(topItem && query.length >= 2),
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Recommended Popular Content when search is empty
   const { data: popularData, isPending: isPopularPending } = useQuery({
     queryKey: ["search-popular-recommendations"],
     queryFn: () => fetchPopular({ data: { page: 1 } }),
     staleTime: 1000 * 60 * 10,
   });
+
+  // Real-time Dynamic Viral/Trending Titles for quick search chips (top 5 to 6)
+  const { data: trendingData } = useQuery({
+    queryKey: ["search-trending-chips"],
+    queryFn: () => fetchTrending({ data: { page: 1 } }),
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const viralSuggestions = useMemo(() => {
+    if (trendingData?.items && trendingData.items.length > 0) {
+      const titles = trendingData.items.map((item) => item.title).filter(Boolean);
+      return Array.from(new Set(titles)).slice(0, 6);
+    }
+    return [
+      "Deadpool & Wolverine",
+      "Stranger Things",
+      "Dune",
+      "The Boys",
+      "House of the Dragon",
+      "Loki",
+    ];
+  }, [trendingData?.items]);
 
   const isLoadingSearch = query.length >= 2 && (isDebouncing || isFetching || isPending);
 
@@ -81,7 +112,7 @@ function SearchPage() {
   return (
     <div className="mx-auto max-w-[1600px] px-4 pt-6 sm:pt-8 md:pt-10 pb-16 md:px-8">
       {/* Search Input Card */}
-      <div className="fade-up mx-auto max-w-3xl space-y-4">
+      <div className="fade-up mx-auto max-w-3xl space-y-3.5">
         <div className="glass flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all focus-within:ring-2 focus-within:ring-[#E50914] focus-within:border-[#E50914]">
           <IconSearch
             width={20}
@@ -109,22 +140,26 @@ function SearchPage() {
           )}
         </div>
 
-        {/* Quick Suggestion Chips */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider pl-1 mr-1">
-            Trending:
-          </span>
-          {SUGGESTIONS.map((s, idx) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => handleSuggestionClick(s)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] hover:bg-[#E50914]/20 border border-white/10 hover:border-[#E50914]/40 px-3 py-1 text-xs font-semibold text-neutral-300 hover:text-white transition-all cursor-pointer active:scale-95 shadow-sm"
-            >
-              <span className="text-[10px] font-extrabold text-[#E50914]">#{idx + 1}</span>
-              <span>{s}</span>
-            </button>
-          ))}
+        {/* Real-time Dynamic Viral / Trending Titles Quick Chips (5-6 titles) */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          {viralSuggestions.map((title) => {
+            const isSelected = query.toLowerCase() === title.toLowerCase();
+            return (
+              <button
+                key={title}
+                type="button"
+                onClick={() => handleSuggestionClick(title)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200 cursor-pointer active:scale-95 shadow-sm border",
+                  isSelected
+                    ? "bg-[#E50914] text-white border-[#E50914] shadow-md shadow-[#E50914]/30"
+                    : "bg-white/[0.05] hover:bg-white/[0.12] text-neutral-300 hover:text-white border-white/[0.08]",
+                )}
+              >
+                <span>{title}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -146,24 +181,52 @@ function SearchPage() {
               hint="Try checking the spelling or search for another movie, show, or series."
             />
           ) : (
-            <div className="space-y-4 fade-up">
-              <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-                <p className="text-xs sm:text-sm font-semibold text-[#94a3b8]">
-                  Found <span className="font-bold text-white">{data?.items.length ?? 0}</span>{" "}
-                  results for “<span className="text-[#E50914] font-bold">{query}</span>”
-                </p>
+            <div className="space-y-8 fade-up">
+              {/* Section 1: Exact Matches */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                  <p className="text-xs sm:text-sm font-semibold text-[#94a3b8]">
+                    Found <span className="font-bold text-white">{data?.items.length ?? 0}</span>{" "}
+                    results for “<span className="text-[#E50914] font-bold">{query}</span>”
+                  </p>
+                </div>
+                <Grid items={data?.items ?? []} />
               </div>
-              <Grid items={data?.items ?? []} />
+
+              {/* Section 2: Smart Algorithm — More Like Top Match (YouTube/Netflix style) */}
+              {smartRecs?.similar && smartRecs.similar.length > 0 && topItem && (
+                <div className="pt-2">
+                  <Row title={`More Like "${topItem.title}"`} items={smartRecs.similar} />
+                </div>
+              )}
+
+              {/* Section 3: Smart Algorithm — Director / Creator Spotlight */}
+              {smartRecs?.director && smartRecs.director.works.length > 0 && (
+                <div className="pt-2">
+                  <Row
+                    title={`Director Spotlight: ${smartRecs.director.name}`}
+                    items={smartRecs.director.works}
+                  />
+                </div>
+              )}
             </div>
           )
         ) : (
           /* When no query is typed: Show curated Recommended Content */
-          <div className="space-y-4 fade-up">
-            <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-              <IconSparkles width={16} height={16} className="text-[#E50914]" />
-              <h2 className="text-sm sm:text-base font-bold text-white">Popular on TMDB</h2>
+          <div className="space-y-6 fade-up">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
+                <IconSparkles width={16} height={16} className="text-[#E50914]" />
+                <h2 className="text-sm sm:text-base font-bold text-white">Popular on 7Shows</h2>
+              </div>
+              <Grid items={popularData?.items ?? []} loading={isPopularPending} />
             </div>
-            <Grid items={popularData?.items ?? []} loading={isPopularPending} />
+
+            {trendingData?.items && trendingData.items.length > 0 && (
+              <div className="pt-4">
+                <Row title="Trending Movies & Series" items={trendingData.items} />
+              </div>
+            )}
           </div>
         )}
       </div>

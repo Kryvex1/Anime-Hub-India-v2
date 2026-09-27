@@ -77,7 +77,7 @@ function LibraryPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pt-4 sm:pt-6 pb-12 md:px-8">
+    <div className="mx-auto max-w-[1600px] min-h-[calc(100dvh-70px)] px-4 pt-4 sm:pt-6 pb-20 md:px-8 overscroll-none select-none">
       {/* Top Navigation Bar: Mobile-optimized Back Icon + Tab Pills */}
       <div className="flex items-center justify-between pb-3">
         {/* Back Button: Icon only on mobile, text on desktop */}
@@ -143,7 +143,7 @@ function LibraryPage() {
 
       {/* TAB 1: WATCHLIST */}
       {activeTab === "watchlist" && (
-        <div className="mt-6">
+        <div className="mt-4">
           {!ready || (ids.length > 0 && isPending) ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: Math.max(ids.length, 6) }).map((_, i) => (
@@ -151,7 +151,7 @@ function LibraryPage() {
               ))}
             </div>
           ) : ids.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl bg-[#0D111C]/60 border border-white/[0.06]">
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl bg-[#0D111C]/60 border border-white/[0.06] my-6">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/10 text-[#E50914] mb-3 shadow-lg shadow-[#E50914]/10">
                 <Bookmark className="w-7 h-7" />
               </div>
@@ -195,9 +195,9 @@ function LibraryPage() {
 
       {/* TAB 2: WATCH HISTORY */}
       {activeTab === "history" && (
-        <div className="mt-6">
+        <div className="mt-4">
           {history.length > 0 && (
-            <div className="flex justify-end pb-3">
+            <div className="flex justify-end pb-2.5">
               <button
                 type="button"
                 onClick={() => setConfirmClearHistory(true)}
@@ -216,7 +216,7 @@ function LibraryPage() {
               ))}
             </div>
           ) : history.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-4 text-center rounded-3xl bg-[#0D111C]/60 border border-white/[0.06]">
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl bg-[#0D111C]/60 border border-white/[0.06] my-6">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/10 text-[#E50914] mb-3 shadow-lg shadow-[#E50914]/10">
                 <Clock className="w-7 h-7" />
               </div>
@@ -249,6 +249,7 @@ function LibraryPage() {
                 return (
                   <div
                     key={`history-card-${item.animeId}`}
+                    style={{ contentVisibility: "auto", containIntrinsicSize: "0 180px" }}
                     className="fade-up group relative rounded-2xl overflow-hidden bg-[#121624] border border-white/[0.08] hover:border-[#E50914]/60 transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-[#E50914]/10"
                   >
                     {/* Widescreen Thumbnail */}
