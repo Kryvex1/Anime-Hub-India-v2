@@ -5,12 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconClose, IconSearch, IconSparkles } from "@/components/anime/icons";
 import { Grid, Row } from "@/components/anime/row";
 import { EmptyState, ErrorState } from "@/components/anime/states";
-import {
-  fetchPopular,
-  fetchSearch,
-  fetchSmartRecommendations,
-  fetchTrending,
-} from "@/lib/anime.functions";
+import { fetchSearch, fetchSmartRecommendations, fetchTrending } from "@/lib/anime.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/search")({
@@ -73,13 +68,6 @@ function SearchPage() {
     staleTime: 1000 * 60 * 30,
   });
 
-  // Recommended Popular Content when search is empty
-  const { data: popularData, isPending: isPopularPending } = useQuery({
-    queryKey: ["search-popular-recommendations"],
-    queryFn: () => fetchPopular({ data: { page: 1 } }),
-    staleTime: 1000 * 60 * 10,
-  });
-
   // Real-time Dynamic Viral/Trending Titles for quick search chips (top 5 to 6)
   const { data: trendingData } = useQuery({
     queryKey: ["search-trending-chips"],
@@ -123,7 +111,7 @@ function SearchPage() {
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Search movies, web series, or anime by title, character, or genre..."
+            placeholder="Search movies, web series, K-dramas, or anime..."
             className="w-full bg-transparent text-sm sm:text-base outline-none placeholder:text-[#64748b] text-white"
           />
           {input && (
@@ -209,24 +197,29 @@ function SearchPage() {
                   />
                 </div>
               )}
+
+              {/* Section 4: Smart Algorithm — Lead Star Spotlight */}
+              {smartRecs?.star && smartRecs.star.works.length > 0 && (
+                <div className="pt-2">
+                  <Row title={`Starring ${smartRecs.star.name}`} items={smartRecs.star.works} />
+                </div>
+              )}
             </div>
           )
         ) : (
-          /* When no query is typed: Show curated Recommended Content */
-          <div className="space-y-6 fade-up">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-                <IconSparkles width={16} height={16} className="text-[#E50914]" />
-                <h2 className="text-sm sm:text-base font-bold text-white">Popular on 7Shows</h2>
-              </div>
-              <Grid items={popularData?.items ?? []} loading={isPopularPending} />
+          /* When no query is typed: Show clean, distraction-free search guide */
+          <div className="mx-auto max-w-md py-16 text-center space-y-4 fade-up">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/10 text-[#94a3b8]">
+              <IconSearch width={28} height={28} />
             </div>
-
-            {trendingData?.items && trendingData.items.length > 0 && (
-              <div className="pt-4">
-                <Row title="Trending Movies & Series" items={trendingData.items} />
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <h3 className="text-base sm:text-lg font-bold text-white">
+                Search Movies, Series, K-Dramas & Anime
+              </h3>
+              <p className="text-xs sm:text-sm text-[#94a3b8] max-w-xs mx-auto">
+                Type a title, actor, director or genre above to start exploring in HD.
+              </p>
+            </div>
           </div>
         )}
       </div>

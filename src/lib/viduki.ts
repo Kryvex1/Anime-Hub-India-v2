@@ -1,7 +1,7 @@
 // Video Player Providers Architecture & Central Resolver
-// Supporting: Multi Server (Viduki), Hindi / Multi-Audio, Vidy.st, VidLink, CineSrc
+// Supporting: VidLink, Hindi / Multi-Audio, Multi Server, Vidy, Multi Embeds, Ultra HD, and Custom Embeds
 
-export type ProviderType = "viduki" | "vidy" | "vidlink" | "cinesrc";
+export type ProviderType = "vidlink" | "viduki" | "vidy" | "custom";
 export type VidukiApiId = "1" | "2" | "3" | "4";
 
 export interface VidyOptions {
@@ -20,18 +20,61 @@ export interface ServerOption {
   name: string;
   badge?: string;
   description?: string;
+  customUrl?: string;
+  isSpecial?: boolean;
 }
 
 /**
- * 1. VIDY.ST URL GENERATOR (DOCUMENTED SPECIFICATION)
- *
- * Official endpoints:
- * - Movie: https://vidy.st/movie/{tmdbId}
- * - TV:    https://vidy.st/tv/{tmdbId}/{season}/{episode}
- * - Anime: https://vidy.st/anime/{anilistId}/{episode}
- *
- * Supported query parameters:
- * ?color=DC2626&autoplay=true&progress=...&nextEpisode=...&episodeSelector=...&autoplayNextEpisode=...
+ * 1. VIDLINK URL GENERATOR
+ */
+export function getVidLinkUrl(
+  type: "movie" | "tv",
+  id: string | number,
+  season: number = 1,
+  episode: number = 1,
+): string {
+  const cleanId = String(id).trim();
+  const cleanSeason = Math.max(1, Math.floor(Number(season) || 1));
+  const cleanEpisode = Math.max(1, Math.floor(Number(episode) || 1));
+
+  if (type === "movie") {
+    return `https://vidlink.pro/movie/${cleanId}?primaryColor=E50914`;
+  }
+  return `https://vidlink.pro/tv/${cleanId}/${cleanSeason}/${cleanEpisode}?primaryColor=E50914`;
+}
+
+/**
+ * 2. VIDUKI URL GENERATOR
+ */
+export function getVidukiUrl(
+  api: VidukiApiId,
+  type: "movie" | "tv",
+  id: string | number,
+  season: number = 1,
+  episode: number = 1,
+  color: string = "E50914",
+): string {
+  const cleanId = String(id).trim();
+  const cleanSeason = Math.max(1, Math.floor(Number(season) || 1));
+  const cleanEpisode = Math.max(1, Math.floor(Number(episode) || 1));
+
+  if (type === "movie") {
+    if (api === "1") {
+      const cleanColor = color.replace(/^#/, "");
+      return `https://viduki.net/1/movie/${cleanId}${cleanColor ? `?color=${cleanColor}` : ""}`;
+    }
+    return `https://viduki.net/${api}/movie/${cleanId}`;
+  }
+
+  if (type === "tv") {
+    return `https://viduki.net/${api}/tv/${cleanId}/${cleanSeason}/${cleanEpisode}`;
+  }
+
+  return "";
+}
+
+/**
+ * 3. VIDY.ST URL GENERATOR
  */
 export function getVidyUrl(
   type: "movie" | "tv" | "anime",
@@ -81,120 +124,15 @@ export function getVidyUrl(
 }
 
 /**
- * 2. VIDUKI URL GENERATOR
- */
-export function getVidukiUrl(
-  api: VidukiApiId,
-  type: "movie" | "tv",
-  id: string | number,
-  season: number = 1,
-  episode: number = 1,
-  color: string = "E50914",
-): string {
-  const cleanId = String(id).trim();
-  const cleanSeason = Math.max(1, Math.floor(Number(season) || 1));
-  const cleanEpisode = Math.max(1, Math.floor(Number(episode) || 1));
-
-  if (type === "movie") {
-    if (api === "1") {
-      const cleanColor = color.replace(/^#/, "");
-      return `https://viduki.net/1/movie/${cleanId}${cleanColor ? `?color=${cleanColor}` : ""}`;
-    }
-    return `https://viduki.net/${api}/movie/${cleanId}`;
-  }
-
-  if (type === "tv") {
-    return `https://viduki.net/${api}/tv/${cleanId}/${cleanSeason}/${cleanEpisode}`;
-  }
-
-  return "";
-}
-
-/**
- * 3. VIDLINK URL GENERATOR
- */
-export function getVidLinkUrl(
-  type: "movie" | "tv",
-  id: string | number,
-  season: number = 1,
-  episode: number = 1,
-): string {
-  const cleanId = String(id).trim();
-  const cleanSeason = Math.max(1, Math.floor(Number(season) || 1));
-  const cleanEpisode = Math.max(1, Math.floor(Number(episode) || 1));
-
-  if (type === "movie") {
-    return `https://vidlink.pro/movie/${cleanId}?primaryColor=E50914`;
-  }
-  return `https://vidlink.pro/tv/${cleanId}/${cleanSeason}/${cleanEpisode}?primaryColor=E50914`;
-}
-
-/**
- * 4. CINESRC URL GENERATOR
- */
-export function getCineSrcUrl(
-  type: "movie" | "tv",
-  id: string | number,
-  season: number = 1,
-  episode: number = 1,
-): string {
-  const cleanId = String(id).trim();
-  const cleanSeason = Math.max(1, Math.floor(Number(season) || 1));
-  const cleanEpisode = Math.max(1, Math.floor(Number(episode) || 1));
-
-  if (type === "movie") {
-    return `https://cinesrc.com/embed/movie/${cleanId}`;
-  }
-  return `https://cinesrc.com/embed/tv/${cleanId}/${cleanSeason}/${cleanEpisode}`;
-}
-
-/**
- * PROVIDERS ABSTRACTION
- */
-export const providers = {
-  viduki: {
-    name: "Viduki",
-    getUrl: (
-      api: VidukiApiId,
-      type: "movie" | "tv",
-      id: string | number,
-      season: number,
-      episode: number,
-    ) => getVidukiUrl(api, type, id, season, episode),
-  },
-  vidy: {
-    name: "Vidy",
-    getUrl: (
-      type: "movie" | "tv" | "anime",
-      id: string | number,
-      season: number,
-      episode: number,
-      options?: VidyOptions,
-    ) => getVidyUrl(type, id, season, episode, options),
-  },
-  vidlink: {
-    name: "VidLink",
-    getUrl: (type: "movie" | "tv", id: string | number, season: number, episode: number) =>
-      getVidLinkUrl(type, id, season, episode),
-  },
-  cinesrc: {
-    name: "CineSrc",
-    getUrl: (type: "movie" | "tv", id: string | number, season: number, episode: number) =>
-      getCineSrcUrl(type, id, season, episode),
-  },
-};
-
-/**
- * ALL ACTIVE STREAMING SERVERS (ORDERED AS REQUESTED)
- * 1. VidLink (VidLink Provider) - 1st Primary Server!
- * 2. Hindi / Multi-Audio (Viduki API 2: Hindi Dub + Multi Language) - 2nd Server!
- * 3. Multi Server (Viduki API 1: Auto Fast, high-speed CDN)
+ * DEFAULT ACTIVE STREAMING SERVERS (ORDERED AS REQUESTED)
+ * 1. VidLink
+ * 2. Hindi / Multi-Audio (Viduki API 2: Hindi Dub + Multi Language)
+ * 3. Multi Server (Viduki API 1: Auto Fast CDN)
  * 4. Vidy (Vidy.st Provider)
- * 5. CineSrc (CineSrc Provider)
- * 6. Multi Embeds (Viduki API 3)
- * 7. Ultra HD (Viduki API 4)
+ * 5. Multi Embeds (Viduki API 3)
+ * 6. Ultra HD (Viduki API 4)
  */
-export const ALL_PLAY_SERVERS: ServerOption[] = [
+export const DEFAULT_PLAY_SERVERS: ServerOption[] = [
   {
     id: "vidlink",
     provider: "vidlink",
@@ -207,8 +145,9 @@ export const ALL_PLAY_SERVERS: ServerOption[] = [
     provider: "viduki",
     api: "2",
     name: "Hindi / Multi-Audio",
-    badge: "Hindi Dubbed",
-    description: "Includes Hindi, English & multiple audio languages + subtitles",
+    badge: "🇮🇳 Hindi & Dubbed",
+    description: "Includes Hindi, English & multiple audio streams + subtitles",
+    isSpecial: true,
   },
   {
     id: "viduki-1",
@@ -224,13 +163,6 @@ export const ALL_PLAY_SERVERS: ServerOption[] = [
     name: "Vidy",
     badge: "Fast HD · No Ads",
     description: "Clean Vidy.st player node with responsive buffer",
-  },
-  {
-    id: "cinesrc",
-    provider: "cinesrc",
-    name: "CineSrc",
-    badge: "Stream Cluster",
-    description: "Multi-source streaming cluster",
   },
   {
     id: "viduki-3",
@@ -250,7 +182,8 @@ export const ALL_PLAY_SERVERS: ServerOption[] = [
   },
 ];
 
-export const VIDUKI_SERVERS = ALL_PLAY_SERVERS.filter((s) => s.provider === "viduki");
+export const ALL_PLAY_SERVERS = DEFAULT_PLAY_SERVERS;
+export const VIDUKI_SERVERS = DEFAULT_PLAY_SERVERS.filter((s) => s.provider === "viduki");
 
 /**
  * CENTRAL RESOLVER
@@ -263,8 +196,11 @@ export function resolveStreamUrl(
   episode: number = 1,
   anilistId?: number | null,
 ): string {
+  if (server.provider === "custom" && server.customUrl) {
+    return server.customUrl;
+  }
+
   if (server.provider === "vidy") {
-    // If anilistId is available and type is anime/tv, use anime endpoint
     if (anilistId) {
       return getVidyUrl("anime", anilistId, season, episode, {
         color: "E50914",
@@ -281,10 +217,6 @@ export function resolveStreamUrl(
     return getVidLinkUrl(type, id, season, episode);
   }
 
-  if (server.provider === "cinesrc") {
-    return getCineSrcUrl(type, id, season, episode);
-  }
-
   // Default: Viduki
   const apiId: VidukiApiId = server.api || "1";
   return getVidukiUrl(apiId, type, id, season, episode);
@@ -292,14 +224,16 @@ export function resolveStreamUrl(
 
 /**
  * AUTOMATIC SERVER ROTATION FALLBACK
- * Multi Server -> Hindi / Multi-Audio -> Vidy -> VidLink -> CineSrc -> Multi Embeds -> Ultra HD -> null
  */
-export function getNextServer(currentServerId: string): ServerOption | null {
-  const currentIndex = ALL_PLAY_SERVERS.findIndex((s) => s.id === currentServerId);
-  if (currentIndex === -1 || currentIndex >= ALL_PLAY_SERVERS.length - 1) {
+export function getNextServer(
+  currentServerId: string,
+  serverList: ServerOption[] = DEFAULT_PLAY_SERVERS,
+): ServerOption | null {
+  const currentIndex = serverList.findIndex((s) => s.id === currentServerId);
+  if (currentIndex === -1 || currentIndex >= serverList.length - 1) {
     return null;
   }
-  return ALL_PLAY_SERVERS[currentIndex + 1];
+  return serverList[currentIndex + 1];
 }
 
 export function getNextVidukiApi(currentApi: VidukiApiId): VidukiApiId | null {

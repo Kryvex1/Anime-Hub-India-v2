@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Edit, Sparkles } from "lucide-react";
 
 import { animateCardStagger } from "@/lib/anime-animation";
 import { fetchSeason, fetchShow } from "@/lib/anime.functions";
 import { getMediaCategory } from "@/lib/routes-helper";
 import { getKnownCard, type ShowDetails } from "@/lib/tmdb";
+import { useAuthUser, fetchCustomStream } from "@/lib/firebase";
+import { CustomStreamModal } from "./custom-stream-modal";
 import { cn } from "@/lib/utils";
 import { IconCalendar, IconClock, IconPlay, IconShare, IconStar } from "./icons";
 import { Img, img } from "./media";
@@ -15,9 +18,11 @@ import { CastCrewSection, PersonWorksModal, type SelectedPerson } from "./cast-c
 
 export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }) {
   const router = useRouter();
+  const { user, isAdmin } = useAuthUser();
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<SelectedPerson | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const epGridRef = useRef<HTMLDivElement | null>(null);
 
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -72,10 +77,15 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
     return false;
   }, [data]);
 
-  // Valid seasons for TV series
+  // Valid seasons for TV series (excluding bonus/specials)
   const allSeasons = useMemo(() => {
     return (data?.seasons ?? []).filter(
-      (s) => s.seasonNumber > 0 && s.episodeCount > 0 && !s.name?.toLowerCase().includes("special"),
+      (s) =>
+        s.seasonNumber > 0 &&
+        !s.name?.toLowerCase().includes("special") &&
+        !s.name?.toLowerCase().includes("bonus") &&
+        !s.name?.toLowerCase().includes("recap") &&
+        !s.name?.toLowerCase().includes("extra"),
     );
   }, [data?.seasons]);
 
@@ -260,6 +270,11 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                     ? "Movie"
                     : "Series"}
               </span>
+              {data.contentRating && (
+                <span className="rounded-md bg-amber-500/20 border border-amber-500/30 px-2.5 py-0.5 text-[10px] font-black text-amber-300 uppercase tracking-wider">
+                  {data.contentRating}
+                </span>
+              )}
             </div>
 
             {data.title ? (
@@ -342,6 +357,17 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                 <IconPlay width={15} height={15} /> {isMovie ? "Watch Movie" : "Watch Now"}
               </button>
 
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-full bg-[#E50914]/20 hover:bg-[#E50914]/30 border border-[#E50914]/40 px-4 py-2.5 text-xs font-bold text-[#ff4d56] transition-all active:scale-95 cursor-pointer shadow-sm shadow-[#E50914]/10"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Edit Custom Stream</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => void share()}
@@ -378,20 +404,40 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                 isMovie
                   ? data.runtime
                     ? `${data.runtime} min`
-                    : "Feature Length"
-                  : String(data.numberOfEpisodes || "—")
+                    : isPending
+                      ? undefined
+                      : "Feature Length"
+                  : data.numberOfEpisodes
+                    ? `${data.numberOfEpisodes} Episodes`
+                    : isPending
+                      ? undefined
+                      : "Multi-Episode"
               }
             />
-            <Info label="Release Date" value={data.firstAirDate || "—"} />
+            <Info
+              label="Release Date"
+              loading={isPending && !data.firstAirDate}
+              value={
+                data.firstAirDate ? data.firstAirDate : isPending ? undefined : "Available in HD"
+              }
+            />
             <Info
               label="Language"
               loading={isPending && !data.language}
-              value={data.language?.toUpperCase() || "—"}
+              value={
+                data.language ? data.language.toUpperCase() : isPending ? undefined : "Multi-Audio"
+              }
             />
             <Info
               label="Country"
               loading={isPending && (!data.countries || data.countries.length === 0)}
-              value={data.countries && data.countries.length > 0 ? data.countries.join(", ") : "—"}
+              value={
+                data.countries && data.countries.length > 0
+                  ? data.countries.join(", ")
+                  : isPending
+                    ? undefined
+                    : "International"
+              }
             />
             <Info
               label="Studios"
@@ -402,7 +448,9 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                       .map((c) => c.name)
                       .filter(Boolean)
                       .join(", ")
-                  : "—"
+                  : isPending
+                    ? undefined
+                    : "Official Production"
               }
             />
           </dl>
@@ -467,14 +515,14 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                   </p>
                 </div>
 
-                {availableSeasons.length > 1 && (
-                  <div className="scrollbar-none no-scrollbar flex gap-1.5 overflow-x-auto pb-1">
+                {availableSeasons.length > 0 && (
+                  <div className="scrollbar-none no-scrollbar flex gap-1.5 overflow-x-auto pb-1 max-w-full">
                     {availableSeasons.map((s) => (
                       <button
                         key={s.id}
                         onClick={() => setSeasonNumber(s.seasonNumber)}
                         className={cn(
-                          "rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer active:scale-95",
+                          "rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer active:scale-95 shrink-0",
                           s.seasonNumber === activeSeason
                             ? "bg-[#E50914] text-white shadow-md shadow-[#E50914]/30"
                             : "bg-white/[0.04] text-[#94a3b8] hover:text-white hover:bg-white/10",
@@ -606,6 +654,22 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
 
       {/* Person Works Modal */}
       <PersonWorksModal person={selectedPerson} onClose={() => setSelectedPerson(null)} />
+
+      {/* Admin Custom Stream Modal */}
+      {isAdmin && (
+        <CustomStreamModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          mediaId={id}
+          mediaType={isMovie ? "movie" : "tv"}
+          season={activeSeason}
+          episode={1}
+          title={data.title}
+          onSaved={() => {
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -616,14 +680,15 @@ function Info({
   loading = false,
 }: {
   label: string;
-  value: React.ReactNode;
+  value?: React.ReactNode;
   loading?: boolean;
 }) {
+  const isLoading = loading || value === undefined || value === null || value === "";
   return (
     <div className="space-y-0.5">
       <dt className="text-[11px] font-semibold text-[#94a3b8]">{label}</dt>
-      {loading ? (
-        <div className="h-3.5 w-20 rounded bg-white/[0.08] shimmer" />
+      {isLoading ? (
+        <div className="h-3.5 w-20 rounded bg-white/[0.08] shimmer my-0.5" />
       ) : (
         <dd className="font-bold text-white truncate">{value}</dd>
       )}
@@ -644,7 +709,10 @@ function DetailSkeleton() {
         <div className="flex flex-col gap-5 md:flex-row md:items-end">
           <div className="h-44 w-28 shrink-0 rounded-2xl bg-white/[0.08] shimmer md:h-72 md:w-52 shadow-2xl ring-1 ring-white/10" />
           <div className="w-full space-y-3.5">
-            <div className="h-4 w-20 rounded bg-white/[0.08] shimmer" />
+            <div className="flex gap-2">
+              <div className="h-4 w-20 rounded bg-white/[0.08] shimmer" />
+              <div className="h-4 w-16 rounded bg-amber-500/20 shimmer" />
+            </div>
             <div className="h-8 sm:h-12 w-2/3 rounded-xl bg-white/[0.1] shimmer" />
             <div className="flex gap-2">
               <div className="h-4 w-14 rounded-full bg-white/[0.06] shimmer" />
@@ -689,6 +757,33 @@ function DetailSkeleton() {
             </div>
           </div>
           <SeasonSkeleton />
+        </div>
+
+        {/* Cast & Crew Skeleton */}
+        <div className="rounded-3xl bg-[#0D111C]/80 border border-white/[0.08] p-5 sm:p-7 space-y-4">
+          <div className="h-4 w-32 rounded bg-white/[0.08] shimmer" />
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-2 shrink-0 w-20">
+                <div className="h-16 w-16 rounded-full bg-white/[0.06] shimmer" />
+                <div className="h-2.5 w-14 rounded bg-white/[0.05] shimmer" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recommendations Skeleton */}
+        <div className="space-y-4 pt-4">
+          <div className="h-4 w-44 rounded bg-white/[0.08] shimmer" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="aspect-[2/3] w-full rounded-2xl bg-white/[0.06] shimmer" />
+                <div className="h-3 w-3/4 rounded bg-white/[0.05] shimmer" />
+                <div className="h-2 w-1/2 rounded bg-white/[0.04] shimmer" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   HelpCircle,
   X,
+  Edit,
+  Sparkles,
 } from "lucide-react";
 import { fetchShow, fetchSeason } from "@/lib/anime.functions";
 import { getKnownCard, type ShowDetails } from "@/lib/tmdb";
@@ -27,13 +29,14 @@ import { animateCardStagger } from "@/lib/anime-animation";
 import { Row } from "./row";
 import { CastCrewSection, PersonWorksModal, type SelectedPerson } from "./cast-crew";
 import {
-  ALL_PLAY_SERVERS,
-  VIDUKI_SERVERS,
+  DEFAULT_PLAY_SERVERS,
   resolveStreamUrl,
   getNextServer,
   getNextVidukiApi,
   type ServerOption,
 } from "@/lib/viduki";
+import { useAuthUser, fetchCustomStream, fetchGlobalServerConfig } from "@/lib/firebase";
+import { CustomStreamModal } from "./custom-stream-modal";
 import { getAniListIdByTitle } from "@/lib/anilist";
 import { getMediaCategory } from "@/lib/routes-helper";
 import {
@@ -219,10 +222,15 @@ export function AnimePlayer({
     return false;
   }, [anime]);
 
-  // All valid seasons for TV series
+  // All valid seasons for TV series (excluding bonus/specials)
   const allSeasons = useMemo(() => {
     return (anime?.seasons ?? []).filter(
-      (s) => s.seasonNumber > 0 && s.episodeCount > 0 && !s.name?.toLowerCase().includes("special"),
+      (s) =>
+        s.seasonNumber > 0 &&
+        !s.name?.toLowerCase().includes("special") &&
+        !s.name?.toLowerCase().includes("bonus") &&
+        !s.name?.toLowerCase().includes("recap") &&
+        !s.name?.toLowerCase().includes("extra"),
     );
   }, [anime?.seasons]);
 
@@ -293,21 +301,95 @@ export function AnimePlayer({
     staleTime: 1000 * 60 * 60 * 24,
   });
 
-  // Selected Streaming Server (Default: Multi Server - index 0)
+  // Auth state for admin features
+  const { user, isAdmin } = useAuthUser();
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Fetch Custom Stream from Firebase Firestore
+  const {
+    data: customStream,
+    isPending: isCustomPending,
+    refetch: refetchCustomStream,
+  } = useQuery({
+    queryKey: ["custom-stream", animeId, effectiveSeasonNum, effectiveEpisodeNum],
+    queryFn: () =>
+      fetchCustomStream(isMovie ? "movie" : "tv", animeId, effectiveSeasonNum, effectiveEpisodeNum),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Fetch Global Server Config (server names & hidden list) from Firebase
+  const { data: globalConfig, isPending: isConfigPending } = useQuery({
+    queryKey: ["global-server-config"],
+    queryFn: () => fetchGlobalServerConfig(),
+    staleTime: 1000 * 60 * 10,
+  });
+
+  // Compute Active Servers list dynamically
+  const activeServers = useMemo<ServerOption[]>(() => {
+    const list: ServerOption[] = [];
+
+    // 1. If custom stream exists from Firebase, add it as the primary option!
+    if (customStream && customStream.customUrl) {
+      list.push({
+        id: "custom-stream",
+        provider: "custom",
+        name: customStream.serverName || "VIP Server",
+        badge: customStream.badge || "Custom VIP",
+        description: "Custom iframe embed configured for this title",
+        customUrl: customStream.customUrl,
+        isSpecial: true,
+      });
+    }
+
+    // 2. If all default servers are hidden (either globally or for this specific title)
+    const isGloballyHidden = Boolean(globalConfig?.allHidden);
+    const isPerMediaHidden = Boolean(customStream?.hideDefaultServers);
+    if ((isGloballyHidden || isPerMediaHidden) && list.length > 0) {
+      return list;
+    }
+
+    // 3. Process default servers with custom names and combined global + per-media hidden filters
+    const globalHidden = globalConfig?.hiddenServers || [];
+    const mediaHidden = customStream?.hiddenServers || [];
+    const combinedHiddenSet = new Set([...globalHidden, ...mediaHidden]);
+
+    for (const s of DEFAULT_PLAY_SERVERS) {
+      if (!combinedHiddenSet.has(s.id)) {
+        const renamed = globalConfig?.serverNames?.[s.id];
+        const customBadge = globalConfig?.serverBadges?.[s.id];
+        list.push({
+          ...s,
+          name: renamed || s.name,
+          badge: customBadge !== undefined ? customBadge : s.badge,
+        });
+      }
+    }
+
+    return list.length > 0 ? list : DEFAULT_PLAY_SERVERS;
+  }, [customStream, globalConfig]);
+
+  // Selected Streaming Server (Default to Custom Stream if present, else first active server)
   const [selectedServer, setSelectedServer] = useState<ServerOption>(() => {
-    return ALL_PLAY_SERVERS[0];
+    return DEFAULT_PLAY_SERVERS[0];
   });
   const [allServersFailed, setAllServersFailed] = useState<boolean>(false);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
 
-  // Always default to Multi Server on new anime load
+  // Sync selected server when activeServers updates or new media loads
   useEffect(() => {
-    setSelectedServer(ALL_PLAY_SERVERS[0]);
+    if (activeServers.length > 0) {
+      // If custom stream was just loaded, select it immediately
+      if (customStream && customStream.customUrl) {
+        setSelectedServer(activeServers[0]);
+      } else if (!activeServers.some((s) => s.id === selectedServer.id)) {
+        setSelectedServer(activeServers[0]);
+      }
+    }
     setAllServersFailed(false);
     setFallbackNotice(null);
-  }, [animeId]);
+  }, [animeId, activeServers, customStream]);
 
-  // Stream URL calculation supporting Viduki, Vidy.st, VidLink, CineSrc
+  // Stream URL calculation supporting Custom Embeds, Viduki, Vidy.st, VidLink
   const currentStreamUrl = useMemo(() => {
     return resolveStreamUrl(
       selectedServer,
@@ -322,7 +404,7 @@ export function AnimePlayer({
   // Automatic server rotation when a server fails
   const switchToNextServer = useCallback(
     (reason?: string) => {
-      const next = getNextServer(selectedServer.id);
+      const next = getNextServer(selectedServer.id, activeServers);
       if (next) {
         setSelectedServer(next);
         setIframeKey((k) => k + 1);
@@ -335,7 +417,7 @@ export function AnimePlayer({
         setAllServersFailed(true);
       }
     },
-    [selectedServer],
+    [selectedServer, activeServers],
   );
 
   // Automatic timeout fallback: If stream takes more than 7.5 seconds to load, try next server automatically
@@ -768,46 +850,102 @@ export function AnimePlayer({
         )}
 
         {/* 3. SERVER SELECTOR & CONTROLS BAR */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 sm:p-4 bg-[#181818] border border-white/[0.08] rounded-xl shadow-lg">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 sm:p-3.5 bg-[#141822] border border-white/[0.08] rounded-2xl shadow-lg">
           {/* Server Selector Tabs */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-neutral-400 mr-1 flex items-center gap-1.5">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="text-xs font-bold text-neutral-400 mr-1 flex items-center gap-1.5 shrink-0">
               <Server className="w-3.5 h-3.5 text-[#E50914]" /> Servers:
             </span>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {ALL_PLAY_SERVERS.map((server) => {
-                const isSelected = selectedServer.id === server.id;
-                return (
-                  <button
-                    key={server.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedServer(server);
-                      setAllServersFailed(false);
-                      setIframeKey((k) => k + 1);
-                    }}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95",
-                      isSelected
-                        ? "bg-[#E50914] text-white shadow-md shadow-[#E50914]/40 ring-1 ring-white/30"
-                        : "bg-white/[0.06] text-neutral-300 hover:bg-white/[0.12] hover:text-white border border-white/[0.06]",
-                    )}
-                  >
-                    <span
+
+            {isCustomPending || isConfigPending ? (
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-20 rounded-xl bg-white/[0.06] shimmer" />
+                <div className="h-8 w-28 rounded-xl bg-white/[0.06] shimmer" />
+                <div className="h-8 w-24 rounded-xl bg-white/[0.06] shimmer" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {activeServers.map((server) => {
+                  const isSelected = selectedServer.id === server.id;
+                  const isHindi = server.id === "viduki-2";
+                  const isCustom = server.id === "custom-stream";
+
+                  return (
+                    <button
+                      key={server.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedServer(server);
+                        setAllServersFailed(false);
+                        setIframeKey((k) => k + 1);
+                      }}
                       className={cn(
-                        "w-1.5 h-1.5 rounded-full",
-                        isSelected ? "bg-white animate-pulse" : "bg-emerald-400",
+                        "px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95",
+                        isSelected
+                          ? isCustom
+                            ? "bg-amber-500 text-black font-bold border border-amber-400 shadow-md shadow-amber-500/20"
+                            : "bg-[#E50914] text-white font-bold border border-[#ff3b47] shadow-md shadow-[#E50914]/30"
+                          : isHindi
+                            ? "bg-white/[0.04] text-neutral-200 hover:text-white hover:bg-white/[0.08] border border-orange-500/30"
+                            : isCustom
+                              ? "bg-amber-500/10 text-amber-300 hover:text-amber-100 hover:bg-amber-500/20 border border-amber-500/30"
+                              : "bg-white/[0.04] text-neutral-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.08]",
                       )}
-                    />
-                    {server.name}
-                  </button>
-                );
-              })}
-            </div>
+                    >
+                      <span
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full shrink-0",
+                          isSelected
+                            ? isCustom
+                              ? "bg-black"
+                              : "bg-white animate-pulse"
+                            : isHindi
+                              ? "bg-orange-400"
+                              : isCustom
+                                ? "bg-amber-400"
+                                : "bg-emerald-400",
+                        )}
+                      />
+                      <span>{server.name}</span>
+                      {server.badge && (
+                        <span
+                          className={cn(
+                            "text-[10px] px-1.5 py-0.5 rounded font-medium tracking-tight",
+                            isSelected
+                              ? isCustom
+                                ? "bg-black/20 text-black"
+                                : "bg-black/30 text-white/90"
+                              : isHindi
+                                ? "bg-orange-500/20 text-orange-300"
+                                : isCustom
+                                  ? "bg-amber-500/20 text-amber-200"
+                                  : "bg-white/[0.08] text-neutral-400",
+                          )}
+                        >
+                          {server.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Quick Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-end lg:self-auto">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                title="Admin: Edit or Add Custom Stream Embed"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>{customStream ? "Edit Stream" : "Add Stream"}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleShare}
@@ -971,6 +1109,12 @@ export function AnimePlayer({
                 </span>
               )}
 
+              {anime?.contentRating ? (
+                <span className="rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                  {anime.contentRating}
+                </span>
+              ) : null}
+
               {anime?.voteAverage ? (
                 <span className="flex items-center gap-1 text-emerald-400 font-bold">
                   <IconStar width={13} height={13} className="text-amber-400 fill-amber-400" />
@@ -1022,8 +1166,8 @@ export function AnimePlayer({
               </div>
 
               {/* Season Selector Tabs */}
-              {availableSeasons.length > 1 && (
-                <div className="scrollbar-none flex gap-1.5 overflow-x-auto pb-1">
+              {availableSeasons.length > 0 && (
+                <div className="scrollbar-none flex gap-1.5 overflow-x-auto pb-1 max-w-full">
                   {availableSeasons.map((s) => (
                     <button
                       key={s.id}
@@ -1045,7 +1189,7 @@ export function AnimePlayer({
                           });
                         }
                       }}
-                      className={`rounded-lg px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition cursor-pointer active:scale-95 ${
+                      className={`rounded-lg px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition cursor-pointer active:scale-95 shrink-0 ${
                         s.seasonNumber === currentSeasonNum
                           ? "bg-[#E50914] text-white shadow-md shadow-[#E50914]/40"
                           : "bg-white/[0.06] text-neutral-300 hover:text-white"
@@ -1176,6 +1320,22 @@ export function AnimePlayer({
 
       {/* 9. PERSON WORKS MODAL */}
       <PersonWorksModal person={selectedPerson} onClose={() => setSelectedPerson(null)} />
+
+      {/* 10. ADMIN CUSTOM STREAM MODAL */}
+      {isAdmin && (
+        <CustomStreamModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          mediaId={animeId}
+          mediaType={isMovie ? "movie" : "tv"}
+          season={effectiveSeasonNum}
+          episode={effectiveEpisodeNum}
+          title={anime?.title}
+          onSaved={() => {
+            refetchCustomStream();
+          }}
+        />
+      )}
     </div>
   );
 }

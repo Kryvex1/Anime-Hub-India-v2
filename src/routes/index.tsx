@@ -82,7 +82,7 @@ function Index() {
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <Link
-            to="/data/admin"
+            to="/admin"
             className="rounded-2xl bg-[#E50914] px-6 py-3 text-xs sm:text-sm font-bold text-white hover:bg-[#b80710] transition shadow-lg shadow-[#E50914]/30"
           >
             Open Admin Panel to Add Links
@@ -106,22 +106,10 @@ function Index() {
       {data.hero && data.hero.length > 0 && <Hero items={data.hero} />}
 
       <div className="relative z-10 mt-6 sm:mt-8 space-y-6 md:space-y-8 pb-12">
-        {data.trending && data.trending.length > 0 && (
+        {data.hollywood && data.hollywood.length > 0 && (
           <Row
-            title="Trending Now"
-            items={data.trending}
-            action={
-              <Link to="/trending" className="text-xs font-semibold text-primary hover:underline">
-                See all
-              </Link>
-            }
-          />
-        )}
-
-        {data.popular && data.popular.length > 0 && (
-          <Row
-            title="Popular Movies & Series"
-            items={data.popular}
+            title="Hollywood Blockbusters"
+            items={data.hollywood}
             action={
               <Link to="/popular" className="text-xs font-semibold text-primary hover:underline">
                 See all
@@ -130,28 +118,44 @@ function Index() {
           />
         )}
 
-        {data.actionAdventure && data.actionAdventure.length > 0 && (
-          <Row title="Action & Adventure" items={data.actionAdventure} />
+        {data.bollywood && data.bollywood.length > 0 && (
+          <Row title="Bollywood Blockbusters" items={data.bollywood} />
         )}
 
-        {data.fantasySupernatural && data.fantasySupernatural.length > 0 && (
-          <Row title="Fantasy & Supernatural" items={data.fantasySupernatural} />
+        {data.indianTrending && data.indianTrending.length > 0 && (
+          <Row
+            title="Trending in India"
+            items={data.indianTrending}
+            action={
+              <Link to="/trending" className="text-xs font-semibold text-primary hover:underline">
+                See all
+              </Link>
+            }
+          />
         )}
 
-        {data.movies && data.movies.length > 0 && (
-          <Row title="Blockbuster Movies" items={data.movies} />
+        {data.kdrama && data.kdrama.length > 0 && (
+          <Row title="Korean Dramas (K-Drama)" items={data.kdrama} />
         )}
 
-        {data.romanceDrama && data.romanceDrama.length > 0 && (
-          <Row title="Romance & Drama" items={data.romanceDrama} />
+        {data.anime && data.anime.length > 0 && (
+          <Row title="Top Anime Hits & Movies" items={data.anime} />
+        )}
+
+        {data.kidsFamily && data.kidsFamily.length > 0 && (
+          <Row title="Kids & Family Shows" items={data.kidsFamily} />
+        )}
+
+        {data.topSeries && data.topSeries.length > 0 && (
+          <Row title="Popular Web Series" items={data.topSeries} />
+        )}
+
+        {data.southCinema && data.southCinema.length > 0 && (
+          <Row title="South Indian Cinema (Dubbed & Original)" items={data.southCinema} />
         )}
 
         {data.topRated && data.topRated.length > 0 && (
           <Row title="Top Rated Masterpieces" items={data.topRated} />
-        )}
-
-        {data.latest && data.latest.length > 0 && (
-          <Row title="Recently Added" items={data.latest} />
         )}
 
         <div className="pt-4 sm:pt-6">

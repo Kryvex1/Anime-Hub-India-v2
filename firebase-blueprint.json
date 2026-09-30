@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and admin status",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["email", "role"]
+    },
+    "CustomStream": {
+      "title": "CustomStream",
+      "description": "Custom iframe stream URLs and embeds for movies/episodes",
+      "type": "object",
+      "properties": {
+        "mediaId": { "type": "number", "description": "TMDB Media ID" },
+        "mediaType": { "type": "string", "enum": ["movie", "tv"], "description": "Type of media" },
+        "season": { "type": "number", "description": "Season number" },
+        "episode": { "type": "number", "description": "Episode number" },
+        "title": { "type": "string", "description": "Title of the show" },
+        "customUrl": { "type": "string", "description": "Custom Iframe Embed URL" },
+        "serverName": { "type": "string", "description": "Custom Server Name" },
+        "badge": { "type": "string", "description": "Custom Badge text" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Updated timestamp" },
+        "updatedBy": { "type": "string", "description": "Admin UID" }
+      },
+      "required": ["mediaId", "mediaType", "customUrl"]
+    },
+    "ServerConfig": {
+      "title": "ServerConfig",
+      "description": "Global streaming servers configuration, custom names and visibility",
+      "type": "object",
+      "properties": {
+        "serverNames": { "type": "object", "description": "Custom server names mapping" },
+        "hiddenServers": { "type": "array", "description": "List of hidden server IDs" },
+        "allHidden": { "type": "boolean", "description": "Whether default servers are hidden" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Updated timestamp" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User document"
+    },
+    "/customStreams/{streamId}": {
+      "schema": { "$ref": "#/entities/CustomStream" },
+      "description": "Custom stream links collection"
+    },
+    "/serverSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/ServerConfig" },
+      "description": "Global server configuration settings"
+    }
+  }
+}

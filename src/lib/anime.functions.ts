@@ -9,6 +9,16 @@ import {
   trending as fetchTmdbTrending,
   discover as fetchTmdbDiscover,
   discoverMovies as fetchTmdbDiscoverMovies,
+  discoverIndianTrending as fetchTmdbIndianTrending,
+  discoverBollywood as fetchTmdbBollywood,
+  discoverSouthCinema as fetchTmdbSouthCinema,
+  discoverIndianSeries as fetchTmdbIndianSeries,
+  discoverPopularSeries as fetchTmdbPopularSeries,
+  discoverHollywood as fetchTmdbHollywood,
+  discoverKDrama as fetchTmdbKDrama,
+  discoverKidsAndFamily as fetchTmdbKidsAndFamily,
+  discoverAnimeHits as fetchTmdbAnimeHits,
+  discoverTopRatedMovies as fetchTmdbTopRatedMovies,
   ANIMATION_GENRE,
   type Show,
 } from "./tmdb";
@@ -50,38 +60,50 @@ export async function fetchCardItemsByIds(ids: number[]): Promise<CardItem[]> {
 let cachedHomeFeed: { at: number; data: Awaited<ReturnType<typeof fetchHomeDirect>> } | null = null;
 
 async function fetchHomeDirect() {
-  const [trendingRes, tvSeriesRes, moviesRes, topRatedRes, animeRes, actionRes] = await Promise.all(
-    [
-      fetchTmdbTrending(1, "week").catch(() => ({ items: [] as CardItem[] })),
-      fetchTmdbDiscover({ sort_by: "popularity.desc" }, 1).catch(() => ({
-        items: [] as CardItem[],
-      })),
-      fetchTmdbDiscoverMovies({ sort_by: "popularity.desc" }, 1).catch(() => ({
-        items: [] as CardItem[],
-      })),
-      fetchTmdbDiscover({ sort_by: "vote_average.desc", "vote_count.gte": "200" }, 1).catch(() => ({
-        items: [] as CardItem[],
-      })),
-      fetchTmdbDiscover({ with_genres: `${ANIMATION_GENRE}` }, 1).catch(() => ({
-        items: [] as CardItem[],
-      })),
-      fetchTmdbDiscover({ with_genres: "28,10759" }, 1).catch(() => ({
-        items: [] as CardItem[],
-      })),
-    ],
-  );
+  const [
+    hollywoodRes,
+    bollywoodRes,
+    indianTrendingRes,
+    kdramaRes,
+    animeHitsRes,
+    kidsFamilyRes,
+    popularSeriesRes,
+    southCinemaRes,
+    topRatedMoviesRes,
+  ] = await Promise.all([
+    fetchTmdbHollywood(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbBollywood(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbIndianTrending(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbKDrama(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbAnimeHits(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbKidsAndFamily(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbPopularSeries(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbSouthCinema(1).catch(() => ({ items: [] as CardItem[] })),
+    fetchTmdbTopRatedMovies(1).catch(() => ({ items: [] as CardItem[] })),
+  ]);
 
-  const trendingCards = trendingRes.items || [];
-  const tvSeriesCards = tvSeriesRes.items || [];
-  const movieCards = moviesRes.items || [];
-  const topRatedCards = topRatedRes.items || [];
-  const animeCards = animeRes.items || [];
-  const actionCards = actionRes.items || [];
+  // Strict Movie Filtering: Every movie row contains ONLY media_type === "movie" / isMovie === true
+  const hollywoodMovies = (hollywoodRes.items || []).filter((c) => c.isMovie);
+  const bollywoodMovies = (bollywoodRes.items || []).filter((c) => c.isMovie);
+  const indianTrendingMovies = (indianTrendingRes.items || []).filter((c) => c.isMovie);
+  const southCinemaMovies = (southCinemaRes.items || []).filter((c) => c.isMovie);
+  const topRatedMovies = (topRatedMoviesRes.items || []).filter((c) => c.isMovie);
 
-  // Deduplicate and select Hero banners with backdrops
-  const heroCandidates = [...trendingCards, ...movieCards, ...tvSeriesCards].filter((c) =>
-    Boolean(c.backdrop),
-  );
+  // Categories
+  const kdramaShows = kdramaRes.items || [];
+  const animeHits = animeHitsRes.items || [];
+  const kidsFamilyShows = kidsFamilyRes.items || [];
+  const popularSeries = (popularSeriesRes.items || []).filter((c) => !c.isMovie);
+
+  // Deduplicate and select Hero banners with backdrops prioritizing high visual Indian & global hits
+  const heroCandidates = [
+    ...hollywoodMovies,
+    ...bollywoodMovies,
+    ...indianTrendingMovies,
+    ...kdramaShows,
+    ...popularSeries,
+  ].filter((c) => Boolean(c.backdrop));
+
   const seenHeroIds = new Set<number>();
   const heroItems: CardItem[] = [];
 
@@ -94,27 +116,27 @@ async function fetchHomeDirect() {
   }
 
   // Fallback hero if needed
-  if (heroItems.length === 0 && trendingCards.length > 0) {
-    heroItems.push(...trendingCards.slice(0, 5));
+  if (heroItems.length === 0 && hollywoodMovies.length > 0) {
+    heroItems.push(...hollywoodMovies.slice(0, 5));
   }
-
-  // Netflix Top 10 Today list
-  const top10 = trendingCards.slice(0, 10);
 
   return {
     hero: heroItems,
-    trending: trendingCards,
-    top10,
-    tvSeries: tvSeriesCards,
-    movies: movieCards,
-    popular: tvSeriesCards,
-    topRated: topRatedCards,
-    animeHits: animeCards,
-    actionAdventure: actionCards.length > 0 ? actionCards : movieCards.slice(0, 15),
-    fantasySupernatural: animeCards.slice(0, 15),
-    romanceDrama: movieCards.filter((c) => c.genres?.some((g) => /romance|drama|comedy/i.test(g))),
-    latest: trendingCards.slice().reverse(),
-    totalConfigured: trendingCards.length + movieCards.length + tvSeriesCards.length,
+    hollywood: hollywoodMovies,
+    bollywood: bollywoodMovies,
+    indianTrending: indianTrendingMovies,
+    kdrama: kdramaShows,
+    anime: animeHits,
+    kidsFamily: kidsFamilyShows,
+    topSeries: popularSeries,
+    southCinema: southCinemaMovies,
+    topRated: topRatedMovies,
+    totalConfigured:
+      hollywoodMovies.length +
+      bollywoodMovies.length +
+      indianTrendingMovies.length +
+      kdramaShows.length +
+      animeHits.length,
   };
 }
 
@@ -261,6 +283,26 @@ export async function fetchTopRated(args?: { data?: { page?: number } }) {
 
 export async function fetchLatest(args?: { data?: { page?: number } }) {
   return getLatest(args?.data?.page ?? 1);
+}
+
+export async function fetchIndianTrending(args?: { data?: { page?: number } }) {
+  return fetchTmdbIndianTrending(args?.data?.page ?? 1);
+}
+
+export async function fetchBollywood(args?: { data?: { page?: number } }) {
+  return fetchTmdbBollywood(args?.data?.page ?? 1);
+}
+
+export async function fetchSouthCinema(args?: { data?: { page?: number } }) {
+  return fetchTmdbSouthCinema(args?.data?.page ?? 1);
+}
+
+export async function fetchHollywood(args?: { data?: { page?: number } }) {
+  return fetchTmdbHollywood(args?.data?.page ?? 1);
+}
+
+export async function fetchIndianSeries(args?: { data?: { page?: number } }) {
+  return fetchTmdbIndianSeries(args?.data?.page ?? 1);
 }
 
 export async function fetchWatchlistItems({ data }: { data: { ids: number[] } }) {

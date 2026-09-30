@@ -112,6 +112,7 @@ export type ShowDetails = {
   }[];
   recommendations: CardItem[];
   trailerUrl: string | null;
+  contentRating?: string | null;
 };
 
 export type Params = Record<string, string | number | boolean | undefined>;
@@ -346,7 +347,7 @@ export const ANIMATION_GENRE = 16;
 export const JAPAN_ORIGIN = "JP";
 
 export const DISCOVER_BASE: Params = {
-  include_adult: "true",
+  include_adult: "false",
   include_null_first_air_dates: "false",
 };
 
@@ -726,7 +727,12 @@ export async function trending(page = 1, timeWindow: "week" | "day" = "week") {
     const seenIds = new Set<number>();
     const uniqueResults: Show[] = [];
     for (const item of combinedList) {
-      if (item.id && !seenIds.has(item.id)) {
+      if (
+        item.id &&
+        !seenIds.has(item.id) &&
+        (item.poster_path || item.backdrop_path) &&
+        !isDailySoapOrJunkTV(item)
+      ) {
         seenIds.add(item.id);
         uniqueResults.push(item);
       }
@@ -746,6 +752,448 @@ export async function trending(page = 1, timeWindow: "week" | "day" = "week") {
   return discover({ sort_by: "popularity.desc" }, page);
 }
 
+export const JUNK_TV_GENRES = new Set([
+  10763, // News
+  10764, // Reality
+  10766, // Soap Opera
+  10767, // Talk Show
+]);
+
+export const DAILY_SOAP_KEYWORDS = [
+  "the kapil sharma show",
+  "kapil sharma",
+  "c.i.d.",
+  "cid",
+  "pherari mon",
+  "taarak mehta",
+  "tarak mehta",
+  "anupamaa",
+  "anupama",
+  "yeh rishta",
+  "bigg boss",
+  "indian idol",
+  "dance india dance",
+  "khatron ke khiladi",
+  "sa re ga ma pa",
+  "kumkum bhagya",
+  "kundali bhagya",
+  "ghkkpm",
+  "gum hai kisi ke",
+  "savdhaan india",
+  "crime patrol",
+  "kbc",
+  "kaun banega crorepati",
+  "roadies",
+  "splitsvilla",
+  "radha mohan",
+  "bhagya lakshmi",
+  "kundali",
+  "kumkum",
+  "parineetii",
+  "imlie",
+  "parshuram",
+  "mithai",
+  "gaurab",
+  "shobho",
+  "tumi je amar",
+  "chashma",
+  "naagin",
+  "sasural simar",
+  "kasautii",
+  "diya aur baati",
+  "bhabiji",
+  "laughter champions",
+  "comedy circus",
+  "super dancer",
+  "masterchef india",
+  "jhalak dikhhla jaa",
+];
+
+export function isDailySoapOrJunkTV(item: Show): boolean {
+  if (item.genre_ids?.some((g) => JUNK_TV_GENRES.has(g))) return true;
+  const fullTitle =
+    `${item.name || ""} ${item.title || ""} ${item.original_name || ""} ${item.original_title || ""}`.toLowerCase();
+  return DAILY_SOAP_KEYWORDS.some((kw) => fullTitle.includes(kw));
+}
+
+export async function discoverIndianTrending(page = 1) {
+  try {
+    const moviesData = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/movie",
+      {
+        sort_by: "popularity.desc",
+        with_origin_country: "IN",
+        region: "IN",
+        "vote_count.gte": "5",
+        without_genres: "99",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const validMovies = (moviesData.results || [])
+      .filter(
+        (s) =>
+          s.id &&
+          (s.poster_path || s.backdrop_path) &&
+          (s.vote_count ?? 0) >= 3 &&
+          !isDailySoapOrJunkTV(s),
+      )
+      .map((s) => toCard({ ...s, media_type: "movie" }));
+
+    return {
+      page,
+      totalPages: Math.min(moviesData.total_pages ?? 1, 500),
+      items: validMovies,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverBollywood(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/movie",
+      {
+        sort_by: "popularity.desc",
+        with_original_language: "hi",
+        region: "IN",
+        "vote_count.gte": "5",
+        without_genres: "99",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter(
+        (s) =>
+          s.id &&
+          (s.poster_path || s.backdrop_path) &&
+          (s.vote_count ?? 0) >= 3 &&
+          !isDailySoapOrJunkTV(s),
+      )
+      .map((s) => toCard({ ...s, media_type: "movie" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverSouthCinema(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/movie",
+      {
+        sort_by: "popularity.desc",
+        with_original_language: "te|ta|ml|kn",
+        region: "IN",
+        "vote_count.gte": "5",
+        without_genres: "99",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter(
+        (s) =>
+          s.id &&
+          (s.poster_path || s.backdrop_path) &&
+          (s.vote_count ?? 0) >= 3 &&
+          !isDailySoapOrJunkTV(s),
+      )
+      .map((s) => toCard({ ...s, media_type: "movie" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverIndianSeries(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/tv",
+      {
+        sort_by: "popularity.desc",
+        with_origin_country: "IN",
+        without_genres: "10763,10764,10766,10767",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter((s) => s.id && (s.poster_path || s.backdrop_path) && !isDailySoapOrJunkTV(s))
+      .map((s) => toCard({ ...s, media_type: "tv" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverPopularSeries(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/tv",
+      {
+        sort_by: "popularity.desc",
+        without_genres: "10763,10764,10766,10767",
+        "vote_count.gte": "30",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter((s) => s.id && (s.poster_path || s.backdrop_path) && !isDailySoapOrJunkTV(s))
+      .map((s) => toCard({ ...s, media_type: "tv" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverHollywood(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/movie",
+      {
+        sort_by: "popularity.desc",
+        with_original_language: "en",
+        "vote_count.gte": "50",
+        without_genres: "99",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter((s) => s.id && (s.poster_path || s.backdrop_path))
+      .map((s) => toCard({ ...s, media_type: "movie" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverKDrama(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/tv",
+      {
+        sort_by: "popularity.desc",
+        with_original_language: "ko",
+        without_genres: "10763,10764,10766,10767",
+        "vote_count.gte": "20",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter((s) => s.id && (s.poster_path || s.backdrop_path) && !isDailySoapOrJunkTV(s))
+      .map((s) => toCard({ ...s, media_type: "tv" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverKidsAndFamily(page = 1) {
+  try {
+    const [moviesData, tvData] = await Promise.all([
+      tmdb<{ results: Show[]; total_pages: number; page: number }>("/discover/movie", {
+        sort_by: "popularity.desc",
+        with_genres: "10751,16",
+        without_genres: "27,53,80",
+        "vote_count.gte": "30",
+        include_adult: "false",
+        page,
+      }).catch(() => ({ results: [], total_pages: 1, page })),
+      tmdb<{ results: Show[]; total_pages: number; page: number }>("/discover/tv", {
+        sort_by: "popularity.desc",
+        with_genres: "10751,10762,16",
+        without_genres: "10763,10764,10766,10767,80",
+        "vote_count.gte": "20",
+        include_adult: "false",
+        page,
+      }).catch(() => ({ results: [], total_pages: 1, page })),
+    ]);
+
+    const combined = [
+      ...(moviesData.results || []).map((s) => ({ ...s, media_type: "movie" })),
+      ...(tvData.results || []).map((s) => ({ ...s, media_type: "tv" })),
+    ].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+
+    const seenIds = new Set<number>();
+    const items: CardItem[] = [];
+    for (const item of combined) {
+      if (item.id && !seenIds.has(item.id) && (item.poster_path || item.backdrop_path)) {
+        seenIds.add(item.id);
+        items.push(toCard(item));
+      }
+    }
+
+    return {
+      page,
+      totalPages: Math.max(moviesData.total_pages, tvData.total_pages, 1),
+      items,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverAnimeHits(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/tv",
+      {
+        sort_by: "popularity.desc",
+        with_original_language: "ja",
+        with_genres: "16",
+        "vote_count.gte": "30",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter((s) => s.id && (s.poster_path || s.backdrop_path))
+      .map((s) => toCard({ ...s, media_type: "tv" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+export async function discoverTopRatedMovies(page = 1) {
+  try {
+    const data = await tmdb<{ results: Show[]; total_pages: number; page: number }>(
+      "/discover/movie",
+      {
+        sort_by: "vote_average.desc",
+        "vote_count.gte": "300",
+        without_genres: "99",
+        include_adult: "false",
+        page,
+      },
+    );
+
+    const valid = (data.results || [])
+      .filter((s) => s.id && (s.poster_path || s.backdrop_path))
+      .map((s) => toCard({ ...s, media_type: "movie" }));
+
+    return {
+      page: data.page,
+      totalPages: Math.min(data.total_pages ?? 1, 500),
+      items: valid,
+    };
+  } catch {
+    return { page, totalPages: 1, items: [] as CardItem[] };
+  }
+}
+
+function computeSearchRelevanceScore(item: Show, normQuery: string, queryWords: string[]): number {
+  const title = (item.title || item.name || "").trim().toLowerCase();
+  const origTitle = (item.original_title || item.original_name || "").trim().toLowerCase();
+  const cleanTitle = title
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const cleanOrig = origTitle
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  let score = 0;
+
+  // 1. Exact direct matches
+  if (cleanTitle === normQuery || cleanOrig === normQuery) {
+    score += 100000;
+  } else if (cleanTitle.startsWith(normQuery) || cleanOrig.startsWith(normQuery)) {
+    score += 50000;
+  } else if (cleanTitle.includes(normQuery) || cleanOrig.includes(normQuery)) {
+    score += 20000;
+  }
+
+  // 2. Word token coverage
+  let matchedWords = 0;
+  for (const w of queryWords) {
+    if (cleanTitle.includes(w) || cleanOrig.includes(w)) {
+      matchedWords++;
+    }
+  }
+  if (queryWords.length > 0) {
+    if (matchedWords === queryWords.length) {
+      score += 15000;
+    } else {
+      score += (matchedWords / queryWords.length) * 5000;
+    }
+  }
+
+  // 3. Popularity & Vote count (High signals for authentic blockbusters)
+  const popularity = Math.min(item.popularity || 0, 500);
+  const voteCount = Math.min(item.vote_count || 0, 5000);
+  score += popularity * 15;
+  score += voteCount * 2;
+
+  // 4. Recency bonus
+  const releaseDate = item.release_date || item.first_air_date || "";
+  if (releaseDate) {
+    const year = parseInt(releaseDate.slice(0, 4), 10);
+    if (!isNaN(year)) {
+      if (year >= 2024) score += 4000;
+      else if (year >= 2022) score += 2000;
+      else if (year >= 2018) score += 800;
+    }
+  }
+
+  // 5. Bonus for items with proper poster + backdrop (real high-quality titles)
+  if (item.poster_path && item.backdrop_path) {
+    score += 2000;
+  }
+
+  return score;
+}
+
 export async function searchAnime(
   query: string,
   page = 1,
@@ -753,31 +1201,41 @@ export async function searchAnime(
   _options?: { bypassFilter?: boolean },
 ) {
   try {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return { page: 1, totalPages: 0, items: [] as CardItem[] };
+
+    const normQuery = trimmedQuery
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const queryWords = normQuery.split(/\s+/).filter(Boolean);
+
     const [multiData, tvData, movieData] = await Promise.all([
       tmdb<{ results: Show[]; total_pages: number }>(
         "/search/multi",
         {
-          query,
+          query: trimmedQuery,
           page,
-          include_adult: "true",
+          include_adult: "false",
         },
         signal,
       ).catch(() => ({ results: [] as Show[], total_pages: 0 })),
       tmdb<{ results: Show[]; total_pages: number }>(
         "/search/tv",
         {
-          query,
+          query: trimmedQuery,
           page,
-          include_adult: "true",
+          include_adult: "false",
         },
         signal,
       ).catch(() => ({ results: [] as Show[], total_pages: 0 })),
       tmdb<{ results: Show[]; total_pages: number }>(
         "/search/movie",
         {
-          query,
+          query: trimmedQuery,
           page,
-          include_adult: "true",
+          include_adult: "false",
         },
         signal,
       ).catch(() => ({ results: [] as Show[], total_pages: 0 })),
@@ -789,22 +1247,23 @@ export async function searchAnime(
       (s) => s.media_type === "tv" || s.media_type === "movie",
     );
 
-    const rawList = [...multiList, ...tvList, ...movieList].sort(
-      (a, b) => (b.popularity ?? 0) - (a.popularity ?? 0),
-    );
-
-    const junkNewsTalkGenres = new Set([10763, 10767]); // News, Talk
-    const filteredRawList = rawList.filter((item) => {
+    const filteredRawList = [...multiList, ...tvList, ...movieList].filter((item) => {
       if (!item || !item.id) return false;
       const title = item.title || item.name;
       if (!title || title.trim().length === 0) return false;
-      // Must have at least poster or backdrop
-      if (!item.poster_path && !item.backdrop_path) return false;
-      // Skip zero-vote ultra-low popularity junk
-      if ((item.vote_count ?? 0) === 0 && (item.popularity ?? 0) < 1.0) return false;
-      // Skip talk show / news
-      if (item.genre_ids?.some((g) => junkNewsTalkGenres.has(g))) return false;
+      // Skip empty junk items that have neither poster nor backdrop and no votes/popularity
+      if (!item.poster_path && !item.backdrop_path && (item.popularity ?? 0) < 0.5) return false;
+      // Block explicit adult keywords (unless adult mode)
+      const fullTitle = `${title} ${item.original_title || item.original_name || ""}`.toLowerCase();
+      if (EXPLICIT_ADULT_BLOCKLIST.some((kw) => fullTitle.includes(kw))) return false;
       return true;
+    });
+
+    // Score and rank all matches with Google/YouTube precision
+    filteredRawList.sort((a, b) => {
+      const scoreA = computeSearchRelevanceScore(a, normQuery, queryWords);
+      const scoreB = computeSearchRelevanceScore(b, normQuery, queryWords);
+      return scoreB - scoreA;
     });
 
     const seenIds = new Set<number>();
@@ -900,7 +1359,7 @@ function deduplicateCreditsCrew(
 }
 
 async function fetchTvDetails(id: number): Promise<ShowDetails> {
-  const [show, credits, recs, videos] = await Promise.all([
+  const [show, credits, recs, videos, ratingsData] = await Promise.all([
     tmdb<
       Show & {
         last_air_date?: string;
@@ -941,6 +1400,9 @@ async function fetchTvDetails(id: number): Promise<ShowDetails> {
     tmdb<{
       results: { key: string; site: string; type: string; official?: boolean }[];
     }>(`/tv/${id}/videos`).catch(() => ({ results: [] })),
+    tmdb<{
+      results: { iso_3166_1: string; rating: string }[];
+    }>(`/tv/${id}/content_ratings`).catch(() => ({ results: [] })),
   ]);
 
   const trailer =
@@ -949,6 +1411,12 @@ async function fetchTvDetails(id: number): Promise<ShowDetails> {
     ) || videos.results.find((v) => v.site === "YouTube");
 
   const runtime = show.episode_run_time?.[0] ?? null;
+
+  // Extract content rating / age certification
+  const inRating = ratingsData.results.find((r) => r.iso_3166_1 === "IN" && r.rating)?.rating;
+  const usRating = ratingsData.results.find((r) => r.iso_3166_1 === "US" && r.rating)?.rating;
+  const anyRating = ratingsData.results.find((r) => r.rating)?.rating;
+  const contentRating = inRating || usRating || anyRating || null;
 
   setKnownMediaType(id, "tv");
 
@@ -975,26 +1443,79 @@ async function fetchTvDetails(id: number): Promise<ShowDetails> {
     companies: show.production_companies || [],
     status: show.status || "Ended",
     genres: (show.genres || []).map((g) => g.name),
-    seasons: (show.seasons || [])
-      .filter((s) => s.season_number > 0)
-      .map((s) => ({
-        id: s.id,
-        seasonNumber: s.season_number,
-        name: s.name || `Season ${s.season_number}`,
-        episodeCount: s.episode_count ?? 0,
-        poster: s.poster_path ?? null,
-        overview: s.overview || "",
-        airDate: s.air_date ?? null,
-      })),
+    seasons: (() => {
+      const validSeasons = (show.seasons || [])
+        .filter((s) => {
+          if (s.season_number <= 0) return false; // Filter out Season 0 (Specials/Bonus)
+          const name = (s.name || "").toLowerCase();
+          if (
+            name.includes("special") ||
+            name.includes("bonus") ||
+            name.includes("recap") ||
+            name.includes("extra") ||
+            name.includes("zero")
+          ) {
+            return false;
+          }
+          return true;
+        })
+        .map((s) => ({
+          id: s.id,
+          seasonNumber: s.season_number,
+          name: s.name || `Season ${s.season_number}`,
+          episodeCount: s.episode_count ?? 0,
+          poster: s.poster_path ?? null,
+          overview: s.overview || "",
+          airDate: s.air_date ?? null,
+        }));
+
+      // If TMDB reports more seasons than returned in the array, ensure all canonical seasons 1..N exist
+      const maxSeason = Math.max(show.number_of_seasons || 1, validSeasons.length);
+      if (maxSeason > validSeasons.length) {
+        const seasonMap = new Map(validSeasons.map((s) => [s.seasonNumber, s]));
+        const filledSeasons = [];
+        for (let i = 1; i <= maxSeason; i++) {
+          if (seasonMap.has(i)) {
+            filledSeasons.push(seasonMap.get(i)!);
+          } else {
+            filledSeasons.push({
+              id: i * 1000 + show.id,
+              seasonNumber: i,
+              name: `Season ${i}`,
+              episodeCount: 1,
+              poster: show.poster_path ?? null,
+              overview: "",
+              airDate: null,
+            });
+          }
+        }
+        return filledSeasons;
+      }
+
+      return validSeasons.length > 0
+        ? validSeasons
+        : [
+            {
+              id: 1,
+              seasonNumber: 1,
+              name: "Season 1",
+              episodeCount: 1,
+              poster: show.poster_path ?? null,
+              overview: "",
+              airDate: null,
+            },
+          ];
+    })(),
     cast: deduplicateCreditsCast(credits.cast || []),
     crew: deduplicateCreditsCrew(credits.crew || []),
     recommendations: (recs.results || []).slice(0, 12).map(toCard),
     trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
+    contentRating,
   };
 }
 
 async function fetchMovieDetails(id: number): Promise<ShowDetails> {
-  const [movie, credits, recs, videos] = await Promise.all([
+  const [movie, credits, recs, videos, releaseData] = await Promise.all([
     tmdb<
       Show & {
         release_date?: string;
@@ -1023,6 +1544,12 @@ async function fetchMovieDetails(id: number): Promise<ShowDetails> {
     tmdb<{
       results: { key: string; site: string; type: string; official?: boolean }[];
     }>(`/movie/${id}/videos`).catch(() => ({ results: [] })),
+    tmdb<{
+      results: {
+        iso_3166_1: string;
+        release_dates: { certification: string }[];
+      }[];
+    }>(`/movie/${id}/release_dates`).catch(() => ({ results: [] })),
   ]);
 
   const trailer =
@@ -1031,6 +1558,16 @@ async function fetchMovieDetails(id: number): Promise<ShowDetails> {
     ) || videos.results.find((v) => v.site === "YouTube");
 
   const movieTitle = movie.title || movie.name || "Movie";
+
+  // Extract content rating / age certification
+  const inRelease = releaseData.results.find((r) => r.iso_3166_1 === "IN");
+  const inCert = inRelease?.release_dates.find((d) => d.certification)?.certification;
+  const usRelease = releaseData.results.find((r) => r.iso_3166_1 === "US");
+  const usCert = usRelease?.release_dates.find((d) => d.certification)?.certification;
+  const anyCert = releaseData.results
+    .flatMap((r) => r.release_dates)
+    .find((d) => d.certification)?.certification;
+  const contentRating = inCert || usCert || anyCert || null;
 
   setKnownMediaType(id, "movie");
 
@@ -1072,6 +1609,7 @@ async function fetchMovieDetails(id: number): Promise<ShowDetails> {
     crew: deduplicateCreditsCrew(credits.crew || []),
     recommendations: (recs.results || []).slice(0, 12).map(toCard),
     trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
+    contentRating,
   };
 }
 
@@ -1338,6 +1876,11 @@ export type SmartSearchRecommendations = {
     name: string;
     works: CardItem[];
   } | null;
+  star: {
+    id: number;
+    name: string;
+    works: CardItem[];
+  } | null;
 };
 
 export async function fetchSmartSearchRecommendations(
@@ -1346,19 +1889,48 @@ export async function fetchSmartSearchRecommendations(
 ): Promise<SmartSearchRecommendations> {
   try {
     const endpoint = isMovie ? `/movie/${topItemId}` : `/tv/${topItemId}`;
-    const [recsRes, similarRes, creditsRes] = await Promise.all([
+    const [itemDetails, recsRes, similarRes, creditsRes] = await Promise.all([
+      tmdb<Show>(`${endpoint}`).catch(() => null),
       tmdb<{ results: Show[] }>(`${endpoint}/recommendations`).catch(() => ({ results: [] })),
       tmdb<{ results: Show[] }>(`${endpoint}/similar`).catch(() => ({ results: [] })),
       tmdb<{
+        cast: { id: number; name: string; popularity?: number; profile_path?: string }[];
         crew: { id: number; name: string; job?: string; profile_path?: string }[];
-      }>(`${endpoint}/credits`).catch(() => ({ crew: [] })),
+      }>(`${endpoint}/credits`).catch(() => ({ cast: [], crew: [] })),
     ]);
+
+    // Check if the title is Indian (Hindi / South Indian)
+    const isIndian =
+      itemDetails?.origin_country?.includes("IN") ||
+      itemDetails?.original_language === "hi" ||
+      itemDetails?.original_language === "te" ||
+      itemDetails?.original_language === "ta" ||
+      itemDetails?.original_language === "ml";
+
+    let extraIndianResults: Show[] = [];
+    if (isIndian && itemDetails?.genres && itemDetails.genres.length > 0) {
+      try {
+        const genreId = itemDetails.genres[0].id;
+        const res = await tmdb<{ results: Show[] }>("/discover/movie", {
+          with_genres: String(genreId),
+          with_origin_country: "IN",
+          sort_by: "popularity.desc",
+        });
+        extraIndianResults = res.results || [];
+      } catch {
+        // ignore
+      }
+    }
 
     // Combine & deduplicate similar titles
     const seenIds = new Set<number>([topItemId]);
     const similarCards: CardItem[] = [];
 
-    for (const item of [...(recsRes.results || []), ...(similarRes.results || [])]) {
+    for (const item of [
+      ...(recsRes.results || []),
+      ...(extraIndianResults || []),
+      ...(similarRes.results || []),
+    ]) {
       if (
         item.id &&
         !seenIds.has(item.id) &&
@@ -1367,7 +1939,7 @@ export async function fetchSmartSearchRecommendations(
       ) {
         seenIds.add(item.id);
         similarCards.push(toCard({ ...item, media_type: isMovie ? "movie" : "tv" }));
-        if (similarCards.length >= 12) break;
+        if (similarCards.length >= 16) break;
       }
     }
 
@@ -1405,6 +1977,32 @@ export async function fetchSmartSearchRecommendations(
       }
     }
 
+    // Find Top Lead Actor / Star
+    const leadActor = creditsRes.cast && creditsRes.cast.length > 0 ? creditsRes.cast[0] : null;
+    const starWorks: CardItem[] = [];
+    if (leadActor && leadActor.id) {
+      try {
+        const actorCredits = await tmdb<{
+          cast: Show[];
+        }>(`/person/${leadActor.id}/combined_credits`);
+
+        const actorShows = (actorCredits.cast || []).filter(
+          (s) => s.id && s.id !== topItemId && (s.poster_path || s.backdrop_path),
+        );
+
+        const seenActorWorkIds = new Set<number>([topItemId]);
+        for (const work of actorShows) {
+          if (!seenActorWorkIds.has(work.id)) {
+            seenActorWorkIds.add(work.id);
+            starWorks.push(toCard(work));
+            if (starWorks.length >= 10) break;
+          }
+        }
+      } catch {
+        // Ignore star fetch errors
+      }
+    }
+
     return {
       similar: similarCards,
       director:
@@ -1415,11 +2013,20 @@ export async function fetchSmartSearchRecommendations(
               works: directorWorks,
             }
           : null,
+      star:
+        leadActor && starWorks.length > 0
+          ? {
+              id: leadActor.id,
+              name: leadActor.name,
+              works: starWorks,
+            }
+          : null,
     };
   } catch {
     return {
       similar: [],
       director: null,
+      star: null,
     };
   }
 }

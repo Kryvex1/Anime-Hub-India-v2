@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
-
+import { User as UserIcon, Shield, LogIn, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-
+import { useAuthUser } from "@/lib/firebase";
+import { LoginModal } from "./login-modal";
 import { IconAnime, IconHome, IconPopular, IconSearch, IconTrending } from "./icons";
 
 export const LOGO_SRC = "https://imgh.in/host/vylifk";
@@ -46,17 +48,19 @@ export function Header() {
   const router = useRouter();
   const navigate = useNavigate();
   const pathname = router.state.location.pathname;
+  const { user, isAdmin } = useAuthUser();
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   // Do not show header on search, admin panel, or watch player page
-  if (pathname === "/search" || pathname.startsWith("/data/admin") || pathname.includes("/watch")) {
+  if (pathname === "/search" || pathname.startsWith("/admin") || pathname.includes("/watch")) {
     return null;
   }
 
   return (
     <>
-      {/* 1. MOBILE: Apple iPhone Dynamic Island Pill (Completely floating, no full-bar behind it) */}
+      {/* 1. MOBILE: Floating Island Pill */}
       <div className="relative z-40 flex w-full justify-center px-4 pt-3 pb-1 md:hidden pointer-events-none">
-        <div className="pointer-events-auto flex h-11 w-full max-w-[380px] items-center justify-between gap-2.5 rounded-full border border-white/[0.16] bg-[#070A14]/90 px-3.5 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(255,255,255,0.18)] backdrop-blur-3xl transition-all duration-300">
+        <div className="pointer-events-auto flex h-11 w-full max-w-[380px] items-center justify-between gap-2 rounded-full border border-white/[0.16] bg-[#070A14]/90 px-3.5 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(255,255,255,0.18)] backdrop-blur-3xl transition-all duration-300">
           {/* Left: Compact Logo */}
           <Link
             to="/"
@@ -66,18 +70,41 @@ export function Header() {
             <Logo compact />
           </Link>
 
-          {/* Right: Search Pill */}
-          <Link
-            to="/search"
-            className="flex items-center gap-1.5 h-7 rounded-full bg-white/[0.08] border border-white/[0.1] px-3 text-[11px] text-[#94a3b8] transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 cursor-pointer shadow-inner"
-          >
-            <IconSearch width={13} height={13} className="text-[var(--brand-glow)] shrink-0" />
-            <span className="font-medium text-[#cbd5e1]">Search</span>
-          </Link>
+          {/* Right: Search Pill & Login / Admin Icon */}
+          <div className="flex items-center gap-1.5">
+            <Link
+              to="/search"
+              className="flex items-center gap-1.5 h-7 rounded-full bg-white/[0.08] border border-white/[0.1] px-2.5 text-[11px] text-[#94a3b8] transition-all hover:bg-white/[0.12] hover:text-white active:scale-95 cursor-pointer shadow-inner"
+            >
+              <IconSearch width={12} height={12} className="text-[var(--brand-glow)] shrink-0" />
+              <span className="font-medium text-[#cbd5e1]">Search</span>
+            </Link>
+
+            {isAdmin ? (
+              <Link
+                to="/admin"
+                className="flex items-center justify-center h-7 px-2.5 rounded-full bg-[#E50914]/20 border border-[#E50914]/40 text-[#ff4d56] text-[10px] font-bold transition active:scale-95 shadow-sm"
+                title="Admin Management"
+              >
+                <Shield className="w-3.5 h-3.5 mr-1" />
+                <span>Admin</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLoginModalOpen(true)}
+                className="flex items-center justify-center h-7 w-7 rounded-full bg-white/[0.08] border border-white/[0.1] text-neutral-300 hover:text-white transition active:scale-90 cursor-pointer"
+                title="Login to 7Shows"
+                aria-label="Login"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* 2. PC / DESKTOP: Full-Width Sleek Header (Non-sticky, scrolls with page) */}
+      {/* 2. PC / DESKTOP: Full-Width Sleek Header */}
       <header className="relative hidden w-full z-40 bg-gradient-to-b from-[#070A12] via-[#070A12]/95 to-[#070A12]/80 backdrop-blur-xl border-b border-white/[0.04] py-1 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.8)] md:block">
         <nav className="mx-auto flex h-14 max-w-[1600px] items-center justify-between gap-2 lg:gap-4 px-3 sm:px-4 md:px-6 lg:px-8">
           <Link
@@ -105,8 +132,8 @@ export function Header() {
             ))}
           </ul>
 
-          {/* Search Action */}
-          <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
+          {/* Search & Login Actions */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => navigate({ to: "/search" })}
               aria-label="Search shows"
@@ -115,9 +142,27 @@ export function Header() {
               <IconSearch width={14} height={14} className="text-[var(--brand-glow)] shrink-0" />
               <span className="text-xs whitespace-nowrap">Search titles</span>
             </button>
+
+            {isAdmin ? (
+              <Link
+                to="/admin"
+                className="flex items-center gap-1.5 rounded-full bg-[#E50914]/15 hover:bg-[#E50914]/25 border border-[#E50914]/30 px-3 py-1.5 text-xs font-bold text-[#ff4d56] transition active:scale-95 shadow-sm shadow-[#E50914]/10"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Admin Panel</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLoginModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] px-3.5 py-1.5 text-xs font-semibold text-neutral-200 hover:text-white transition active:scale-95 cursor-pointer shadow-sm"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Login</span>
+              </button>
+            )}
           </div>
         </nav>
-        {/* Soft gradient bottom fade border */}
         <div
           className="absolute bottom-0 inset-x-0 h-px pointer-events-none"
           style={{
@@ -126,6 +171,9 @@ export function Header() {
           }}
         />
       </header>
+
+      {/* Login Popup Modal with smooth animation */}
+      <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
     </>
   );
 }
@@ -135,7 +183,7 @@ export function BottomNav() {
   const pathname = router.state.location.pathname;
 
   // Do not show bottom nav on admin panel or watch player page
-  if (pathname.startsWith("/data/admin") || pathname.includes("/watch")) {
+  if (pathname.startsWith("/admin") || pathname.includes("/watch")) {
     return null;
   }
 
