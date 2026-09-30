@@ -7,7 +7,12 @@ import { animateCardStagger } from "@/lib/anime-animation";
 import { fetchSeason, fetchShow } from "@/lib/anime.functions";
 import { getMediaCategory } from "@/lib/routes-helper";
 import { getKnownCard, type ShowDetails } from "@/lib/tmdb";
-import { useAuthUser, fetchCustomStream } from "@/lib/firebase";
+import {
+  useAuthUser,
+  fetchCustomStream,
+  useIsMovieCustomLinked,
+  useTvEpisodeCustomLinks,
+} from "@/lib/firebase";
 import { CustomStreamModal } from "./custom-stream-modal";
 import { cn } from "@/lib/utils";
 import { IconCalendar, IconClock, IconPlay, IconShare, IconStar } from "./icons";
@@ -15,6 +20,7 @@ import { Img, img } from "./media";
 import { ErrorState } from "./states";
 import { Row } from "./row";
 import { CastCrewSection, PersonWorksModal, type SelectedPerson } from "./cast-crew";
+import { BrandBadge } from "./brand-badge";
 
 export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }) {
   const router = useRouter();
@@ -179,6 +185,9 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
       }
     }
   }, [activeSeason]);
+
+  const isMovieCustomLinked = useIsMovieCustomLinked(isMovie ? id : null);
+  const isEpCustomLinked = useTvEpisodeCustomLinks(!isMovie ? id : null, Number(activeSeason) || 1);
 
   if (isError && !data) {
     return (
@@ -473,16 +482,19 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
             </div>
 
             {/* Flat Content */}
-            <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 p-5 sm:p-6">
-              <div className="flex items-center gap-3.5 min-w-0">
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
                 <div className="h-12 w-12 shrink-0 rounded-2xl bg-[#E50914]/20 border border-[#E50914]/40 flex items-center justify-center text-[#ff2a34] shadow-lg shadow-[#E50914]/20">
                   <IconPlay width={20} height={20} />
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-bold text-white truncate">
+                <div className="min-w-0 flex-1">
+                  <h3
+                    className="text-base sm:text-lg font-bold text-white truncate"
+                    title={data.title}
+                  >
                     {data.title}
                   </h3>
-                  <p className="text-xs text-[#94a3b8]">
+                  <p className="text-xs text-[#94a3b8] truncate">
                     {data.runtime
                       ? `${data.runtime} min · Full Movie`
                       : "Feature Film · Stream in HD"}
@@ -554,6 +566,7 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                   >
                     <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                       {renderedEpisodes.map((ep) => {
+                        const hasCustomStream = isEpCustomLinked(ep.episodeNumber);
                         return (
                           <button
                             key={ep.id}
@@ -575,9 +588,12 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
                             </div>
                             <div className="min-w-0 flex-1 py-0.5 flex flex-col justify-between h-full overflow-hidden">
                               <div className="min-w-0 overflow-hidden">
-                                <p className="truncate text-xs font-bold text-[#f1f5f9] group-hover:text-[#ff2a34] transition break-words">
-                                  {ep.name || `Episode ${ep.episodeNumber}`}
-                                </p>
+                                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                                  <p className="truncate text-xs font-bold text-[#f1f5f9] group-hover:text-[#ff2a34] transition flex-1">
+                                    {ep.name || `Episode ${ep.episodeNumber}`}
+                                  </p>
+                                  {hasCustomStream && <BrandBadge />}
+                                </div>
                                 <p className="line-clamp-2 mt-0.5 text-[10px] text-[#94a3b8] break-words leading-tight">
                                   {ep.overview || "No synopsis available."}
                                 </p>

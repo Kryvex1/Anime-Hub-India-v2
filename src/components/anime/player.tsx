@@ -35,8 +35,14 @@ import {
   getNextVidukiApi,
   type ServerOption,
 } from "@/lib/viduki";
-import { useAuthUser, fetchCustomStream, fetchGlobalServerConfig } from "@/lib/firebase";
+import {
+  useAuthUser,
+  fetchCustomStream,
+  fetchGlobalServerConfig,
+  useTvEpisodeCustomLinks,
+} from "@/lib/firebase";
 import { CustomStreamModal } from "./custom-stream-modal";
+import { BrandBadge } from "./brand-badge";
 import { getAniListIdByTitle } from "@/lib/anilist";
 import { getMediaCategory } from "@/lib/routes-helper";
 import {
@@ -274,6 +280,8 @@ export function AnimePlayer({
     return visibleEpisodes.slice(0, playerEpLimit);
   }, [visibleEpisodes, playerEpLimit]);
 
+  const isEpCustomLinked = useTvEpisodeCustomLinks(!isMovie ? animeId : null, currentSeasonNum);
+
   // Initial animation on season change
   useEffect(() => {
     if (epGridRef.current && visibleEpisodes.length > 0) {
@@ -372,8 +380,11 @@ export function AnimePlayer({
 
     for (const s of DEFAULT_PLAY_SERVERS) {
       if (!combinedHiddenSet.has(s.id)) {
-        const renamed = globalConfig?.serverNames?.[s.id];
-        const customBadge = globalConfig?.serverBadges?.[s.id];
+        const renamed = customStream?.serverNames?.[s.id] || globalConfig?.serverNames?.[s.id];
+        const customBadge =
+          customStream?.serverBadges?.[s.id] !== undefined
+            ? customStream.serverBadges[s.id]
+            : globalConfig?.serverBadges?.[s.id];
         list.push({
           ...s,
           name: renamed || s.name,
@@ -1221,6 +1232,7 @@ export function AnimePlayer({
                 <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {renderedPlayerEpisodes.map((ep) => {
                     const isCurrent = ep.episodeNumber === currentEpisodeNum;
+                    const hasCustomStream = isEpCustomLinked(ep.episodeNumber);
                     return (
                       <button
                         key={ep.id}
@@ -1253,9 +1265,12 @@ export function AnimePlayer({
 
                         <div className="min-w-0 flex-1 flex flex-col justify-between h-full py-0.5 overflow-hidden">
                           <div className="min-w-0 overflow-hidden">
-                            <p className="truncate text-xs font-bold text-white group-hover:text-[#ff4d55] transition break-words">
-                              {ep.name || `Episode ${ep.episodeNumber}`}
-                            </p>
+                            <div className="flex items-center justify-between gap-1.5 min-w-0">
+                              <p className="truncate text-xs font-bold text-white group-hover:text-[#ff4d55] transition flex-1">
+                                {ep.name || `Episode ${ep.episodeNumber}`}
+                              </p>
+                              {hasCustomStream && <BrandBadge />}
+                            </div>
                             <p className="line-clamp-2 mt-0.5 text-[10px] text-neutral-400 break-words leading-tight">
                               {ep.overview || "No synopsis available."}
                             </p>

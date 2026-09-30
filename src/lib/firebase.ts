@@ -47,6 +47,8 @@ export interface CustomStreamData {
   serverName?: string;
   badge?: string;
   streams?: CustomStreamLink[]; // Multiple custom stream sources
+  serverNames?: Record<string, string>; // Per-title/episode custom server name overrides (e.g. vidlink -> "Custom Dub")
+  serverBadges?: Record<string, string>; // Per-title/episode custom server badge overrides (e.g. vidlink -> "1080p")
   hiddenServers?: string[]; // Specific default server IDs hidden for this title/episode
   hideDefaultServers?: boolean; // If true, hide all default servers for this specific title
   updatedAt?: string;
@@ -66,6 +68,21 @@ const customStreamCache = new Map<string, { at: number; data: CustomStreamData |
 let globalConfigCache: { at: number; data: GlobalServerConfig | null } | null = null;
 
 const FB_STORAGE_PREFIX = "fb_cache_";
+const CUSTOM_STREAMS_EVENT = "custom_streams_cache_updated";
+
+/**
+ * Check if a custom stream data object actually has a valid custom embed link
+ */
+export function hasValidCustomStream(data: CustomStreamData | null | undefined): boolean {
+  if (!data) return false;
+  if (data.customUrl && data.customUrl.trim().length > 0) return true;
+  if (Array.isArray(data.streams)) {
+    return data.streams.some(
+      (s) => s && typeof s.customUrl === "string" && s.customUrl.trim().length > 0,
+    );
+  }
+  return false;
+}
 
 function getFbSession<T>(key: string): T | null {
   try {
@@ -159,6 +176,17 @@ export async function saveCustomStream(stream: CustomStreamData): Promise<void> 
   await setDoc(docRef, payload, { merge: true });
   customStreamCache.set(docId, { at: Date.now(), data: payload });
   setFbSession(`stream_${docId}`, payload);
+
+  // Invalidate all-custom-streams session cache
+  try {
+    sessionStorage.removeItem(FB_STORAGE_PREFIX + "all_custom_streams");
+  } catch {
+    // Ignore
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CUSTOM_STREAMS_EVENT, { detail: { docId, payload } }));
+  }
 }
 
 /**
@@ -170,13 +198,20 @@ export async function deleteCustomStream(docId: string): Promise<void> {
   customStreamCache.delete(docId);
   try {
     sessionStorage.removeItem(FB_STORAGE_PREFIX + `stream_${docId}`);
+    sessionStorage.removeItem(FB_STORAGE_PREFIX + "all_custom_streams");
   } catch {
     // Ignore
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(CUSTOM_STREAMS_EVENT, { detail: { docId, deleted: true } }),
+    );
   }
 }
 
 /**
- * Fetch all configured custom streams (for admin overview)
+ * Fetch all configured custom streams (for admin overview and badges)
  */
 export async function fetchAllCustomStreams(): Promise<CustomStreamData[]> {
   const sessionAll = getFbSession<CustomStreamData[]>("all_custom_streams");
@@ -192,6 +227,78 @@ export async function fetchAllCustomStreams(): Promise<CustomStreamData[]> {
     console.warn("Error fetching all custom streams:", err);
     return [];
   }
+}
+
+/**
+ * React hook to get a Set of all docIds that have active custom stream links configured
+ */
+export function useCustomStreamIds(): Set<string> {
+  const [streamIds, setStreamIds] = useState<Set<string>>(() => {
+    const cached = getFbSession<CustomStreamData[]>("all_custom_streams");
+    if (cached) {
+      const ids = new Set<string>();
+      for (const item of cached) {
+        if (hasValidCustomStream(item)) {
+          ids.add(item.id);
+        }
+      }
+      return ids;
+    }
+    return new Set<string>();
+  });
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAll = async () => {
+      const all = await fetchAllCustomStreams();
+      if (!mounted) return;
+      const ids = new Set<string>();
+      for (const item of all) {
+        if (hasValidCustomStream(item)) {
+          ids.add(item.id);
+        }
+      }
+      setStreamIds(ids);
+    };
+
+    void loadAll();
+
+    const handleUpdate = () => {
+      void loadAll();
+    };
+
+    window.addEventListener(CUSTOM_STREAMS_EVENT, handleUpdate);
+    return () => {
+      mounted = false;
+      window.removeEventListener(CUSTOM_STREAMS_EVENT, handleUpdate);
+    };
+  }, []);
+
+  return streamIds;
+}
+
+/**
+ * React hook to check if a specific movie has a custom stream link
+ */
+export function useIsMovieCustomLinked(movieId: number | undefined | null): boolean {
+  const customIds = useCustomStreamIds();
+  if (!movieId) return false;
+  return customIds.has(`movie_${movieId}`);
+}
+
+/**
+ * React hook to check if TV episodes have custom stream links
+ */
+export function useTvEpisodeCustomLinks(
+  tvId: number | undefined | null,
+  seasonNumber: number,
+): (epNumber: number) => boolean {
+  const customIds = useCustomStreamIds();
+  return (epNumber: number) => {
+    if (!tvId) return false;
+    return customIds.has(`tv_${tvId}_${seasonNumber}_${epNumber}`);
+  };
 }
 
 /**

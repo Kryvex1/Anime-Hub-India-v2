@@ -48,6 +48,8 @@ export function CustomStreamModal({
   const [streams, setStreams] = useState<CustomStreamLink[]>([
     { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
   ]);
+  const [perMediaServerNames, setPerMediaServerNames] = useState<Record<string, string>>({});
+  const [perMediaServerBadges, setPerMediaServerBadges] = useState<Record<string, string>>({});
   const [hiddenServers, setHiddenServers] = useState<string[]>([]);
   const [hideDefaultServers, setHideDefaultServers] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
@@ -99,12 +101,16 @@ export function CustomStreamModal({
             { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
           ]);
         }
+        setPerMediaServerNames(data.serverNames || {});
+        setPerMediaServerBadges(data.serverBadges || {});
         setHiddenServers(data.hiddenServers || []);
         setHideDefaultServers(Boolean(data.hideDefaultServers));
       } else {
         setStreams([
           { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
         ]);
+        setPerMediaServerNames({});
+        setPerMediaServerBadges({});
         setHiddenServers([]);
         setHideDefaultServers(false);
       }
@@ -135,6 +141,17 @@ export function CustomStreamModal({
       if (prevHidden[i] !== currHidden[i]) return true;
     }
 
+    // Check per-media server names and badges
+    const prevNames = existingData?.serverNames || {};
+    for (const key of Object.keys({ ...prevNames, ...perMediaServerNames })) {
+      if ((perMediaServerNames[key] || "").trim() !== (prevNames[key] || "").trim()) return true;
+    }
+
+    const prevBadges = existingData?.serverBadges || {};
+    for (const key of Object.keys({ ...prevBadges, ...perMediaServerBadges })) {
+      if ((perMediaServerBadges[key] || "").trim() !== (prevBadges[key] || "").trim()) return true;
+    }
+
     // Check custom streams
     const existingStreams =
       Array.isArray(existingData?.streams) && existingData!.streams.length > 0
@@ -163,7 +180,15 @@ export function CustomStreamModal({
     }
 
     return false;
-  }, [fetching, existingData, hideDefaultServers, hiddenServers, streams]);
+  }, [
+    fetching,
+    existingData,
+    hideDefaultServers,
+    hiddenServers,
+    perMediaServerNames,
+    perMediaServerBadges,
+    streams,
+  ]);
 
   if (!isOpen) return null;
 
@@ -226,8 +251,27 @@ export function CustomStreamModal({
 
     const docId = mediaType === "movie" ? `movie_${mediaId}` : `tv_${mediaId}_${season}_${episode}`;
 
-    // If no streams and no hidden servers and not hideAll, clean up doc if exists
-    if (validStreams.length === 0 && hiddenServers.length === 0 && !hideDefaultServers) {
+    // Clean empty server names & badges
+    const cleanedNames: Record<string, string> = {};
+    for (const [k, v] of Object.entries(perMediaServerNames)) {
+      if (v && v.trim()) cleanedNames[k] = v.trim();
+    }
+    const cleanedBadges: Record<string, string> = {};
+    for (const [k, v] of Object.entries(perMediaServerBadges)) {
+      if (v && v.trim()) cleanedBadges[k] = v.trim();
+    }
+
+    const hasNames = Object.keys(cleanedNames).length > 0;
+    const hasBadges = Object.keys(cleanedBadges).length > 0;
+
+    // If no streams, no hidden servers, not hideAll, and no overrides, clean up doc if exists
+    if (
+      validStreams.length === 0 &&
+      hiddenServers.length === 0 &&
+      !hideDefaultServers &&
+      !hasNames &&
+      !hasBadges
+    ) {
       if (existingData) {
         setLoading(true);
         try {
@@ -266,6 +310,8 @@ export function CustomStreamModal({
         serverName: primary ? primary.serverName : "",
         badge: primary ? primary.badge : "",
         streams: validStreams,
+        serverNames: cleanedNames,
+        serverBadges: cleanedBadges,
         hiddenServers,
         hideDefaultServers,
       });
@@ -323,9 +369,7 @@ export function CustomStreamModal({
               <Tv className="w-4 h-4" />
             </span>
             <h2 className="text-base sm:text-lg font-bold text-white truncate">
-              {existingData
-                ? "Edit Custom Streams & Visibility"
-                : "Add Custom Streams & Visibility"}
+              {existingData ? "Edit Custom Streams & Servers" : "Add Custom Streams & Servers"}
             </h2>
           </div>
           <p className="text-xs text-neutral-400 truncate">
@@ -359,10 +403,10 @@ export function CustomStreamModal({
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-neutral-300">
-                    Custom Player Embeds ({streams.length})
+                    Custom Embed Links ({streams.length})
                   </span>
                   <span className="text-[10px] text-neutral-400">
-                    Optional: Leave empty if you only want to hide default servers.
+                    Optional: Leave empty if you only want to rename or hide default servers.
                   </span>
                 </div>
                 <button
@@ -375,7 +419,7 @@ export function CustomStreamModal({
                 </button>
               </div>
 
-              <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[36vh] overflow-y-auto pr-1">
                 {streams.map((st, idx) => (
                   <div
                     key={st.id || idx}
@@ -400,7 +444,7 @@ export function CustomStreamModal({
 
                     <div className="space-y-1">
                       <label className="text-[11px] font-medium text-neutral-300 block">
-                        Embed Iframe Code or Direct URL (Optional)
+                        Embed Iframe Code or Direct URL
                       </label>
                       <textarea
                         rows={2}
@@ -443,13 +487,18 @@ export function CustomStreamModal({
               </div>
             </div>
 
-            {/* Per-Media Server Visibility Controls */}
-            <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+            {/* Per-Media Default Servers Custom Names, Badges & Visibility */}
+            <div className="space-y-2.5 pt-2 border-t border-white/[0.08]">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-neutral-300">
-                  Hide Default Servers for this Title:
-                </span>
-                <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer">
+                <div>
+                  <span className="text-xs font-bold text-neutral-300 block">
+                    Default Servers (Names, Badges & Visibility for this title):
+                  </span>
+                  <span className="text-[10px] text-neutral-400">
+                    Customize names or hide specific default servers only for this title.
+                  </span>
+                </div>
+                <label className="flex items-center gap-2 text-[11px] text-neutral-400 cursor-pointer shrink-0">
                   <input
                     type="checkbox"
                     checked={hideDefaultServers}
@@ -461,27 +510,79 @@ export function CustomStreamModal({
               </div>
 
               {!hideDefaultServers && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                <div className="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
                   {DEFAULT_PLAY_SERVERS.map((s) => {
                     const isHidden = hiddenServers.includes(s.id);
+                    const currentName = perMediaServerNames[s.id] ?? "";
+                    const currentBadge = perMediaServerBadges[s.id] ?? "";
+
                     return (
-                      <button
-                        type="button"
+                      <div
                         key={s.id}
-                        onClick={() => handleToggleServerHide(s.id)}
-                        className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                        className={cn(
+                          "flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl border transition",
                           isHidden
-                            ? "bg-red-500/15 border-red-500/30 text-red-300"
-                            : "bg-white/[0.04] border-white/[0.08] text-neutral-300 hover:text-white"
-                        }`}
-                      >
-                        <span className="truncate">{s.name}</span>
-                        {isHidden ? (
-                          <EyeOff className="w-3 h-3 text-red-400 shrink-0" />
-                        ) : (
-                          <Eye className="w-3 h-3 text-emerald-400 shrink-0" />
+                            ? "bg-red-500/10 border-red-500/20"
+                            : "bg-white/[0.03] border-white/[0.06]",
                         )}
-                      </button>
+                      >
+                        <div className="flex items-center gap-2 min-w-[120px] shrink-0">
+                          <span className="text-xs font-bold text-white truncate block">
+                            {s.name}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={currentName}
+                            onChange={(e) =>
+                              setPerMediaServerNames((prev) => ({
+                                ...prev,
+                                [s.id]: e.target.value,
+                              }))
+                            }
+                            placeholder={s.name}
+                            className="flex-1 min-w-[90px] rounded-lg bg-black/40 border border-white/10 px-2.5 py-1 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-1 focus:ring-[#E50914]"
+                          />
+
+                          <input
+                            type="text"
+                            value={currentBadge}
+                            onChange={(e) =>
+                              setPerMediaServerBadges((prev) => ({
+                                ...prev,
+                                [s.id]: e.target.value,
+                              }))
+                            }
+                            placeholder={s.badge || "Badge"}
+                            className="w-20 sm:w-24 rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-1 focus:ring-[#E50914]"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => handleToggleServerHide(s.id)}
+                            className={cn(
+                              "flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border shrink-0",
+                              isHidden
+                                ? "bg-red-500/20 text-red-400 border-red-500/40"
+                                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20",
+                            )}
+                          >
+                            {isHidden ? (
+                              <>
+                                <EyeOff className="w-3.5 h-3.5" />
+                                <span>Hidden</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Visible</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

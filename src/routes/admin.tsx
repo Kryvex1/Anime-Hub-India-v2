@@ -100,6 +100,8 @@ function AdminPage() {
   const [adminStreams, setAdminStreams] = useState<CustomStreamLink[]>([
     { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
   ]);
+  const [perMediaServerNames, setPerMediaServerNames] = useState<Record<string, string>>({});
+  const [perMediaServerBadges, setPerMediaServerBadges] = useState<Record<string, string>>({});
   const [perMediaHiddenServers, setPerMediaHiddenServers] = useState<string[]>([]);
   const [perMediaHideAllDefaults, setPerMediaHideAllDefaults] = useState(false);
   const [initialMediaData, setInitialMediaData] = useState<CustomStreamData | null>(null);
@@ -171,6 +173,17 @@ function AdminPage() {
       if (prevHidden[i] !== currHidden[i]) return true;
     }
 
+    // Check per-media custom server names and badges
+    const prevNames = initialMediaData?.serverNames || {};
+    for (const key of Object.keys({ ...prevNames, ...perMediaServerNames })) {
+      if ((perMediaServerNames[key] || "").trim() !== (prevNames[key] || "").trim()) return true;
+    }
+
+    const prevBadges = initialMediaData?.serverBadges || {};
+    for (const key of Object.keys({ ...prevBadges, ...perMediaServerBadges })) {
+      if ((perMediaServerBadges[key] || "").trim() !== (prevBadges[key] || "").trim()) return true;
+    }
+
     const existingStreams =
       Array.isArray(initialMediaData?.streams) && initialMediaData!.streams.length > 0
         ? initialMediaData!.streams
@@ -198,7 +211,14 @@ function AdminPage() {
     }
 
     return false;
-  }, [initialMediaData, perMediaHideAllDefaults, perMediaHiddenServers, adminStreams]);
+  }, [
+    initialMediaData,
+    perMediaHideAllDefaults,
+    perMediaHiddenServers,
+    perMediaServerNames,
+    perMediaServerBadges,
+    adminStreams,
+  ]);
 
   // Live TMDB Search Debounce
   useEffect(() => {
@@ -377,12 +397,16 @@ function AdminPage() {
           { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
         ]);
       }
+      setPerMediaServerNames(data.serverNames || {});
+      setPerMediaServerBadges(data.serverBadges || {});
       setPerMediaHiddenServers(data.hiddenServers || []);
       setPerMediaHideAllDefaults(Boolean(data.hideDefaultServers));
     } else {
       setAdminStreams([
         { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
       ]);
+      setPerMediaServerNames({});
+      setPerMediaServerBadges({});
       setPerMediaHiddenServers([]);
       setPerMediaHideAllDefaults(false);
     }
@@ -478,11 +502,26 @@ function AdminPage() {
       ? `movie_${selectedMedia.id}`
       : `tv_${selectedMedia.id}_${selectedSeason}_${selectedEpisode}`;
 
-    // If no custom embeds and no hidden servers and not hideAll, clean up doc
+    // Clean empty server names & badges
+    const cleanedNames: Record<string, string> = {};
+    for (const [k, v] of Object.entries(perMediaServerNames)) {
+      if (v && v.trim()) cleanedNames[k] = v.trim();
+    }
+    const cleanedBadges: Record<string, string> = {};
+    for (const [k, v] of Object.entries(perMediaServerBadges)) {
+      if (v && v.trim()) cleanedBadges[k] = v.trim();
+    }
+
+    const hasNames = Object.keys(cleanedNames).length > 0;
+    const hasBadges = Object.keys(cleanedBadges).length > 0;
+
+    // If no custom embeds, no hidden servers, not hideAll, and no overrides, clean up doc
     if (
       validStreams.length === 0 &&
       perMediaHiddenServers.length === 0 &&
-      !perMediaHideAllDefaults
+      !perMediaHideAllDefaults &&
+      !hasNames &&
+      !hasBadges
     ) {
       if (initialMediaData) {
         setSavingStream(true);
@@ -521,6 +560,8 @@ function AdminPage() {
         serverName: primary ? primary.serverName : "",
         badge: primary ? primary.badge : "",
         streams: validStreams,
+        serverNames: cleanedNames,
+        serverBadges: cleanedBadges,
         hiddenServers: perMediaHiddenServers,
         hideDefaultServers: perMediaHideAllDefaults,
       };
@@ -544,7 +585,7 @@ function AdminPage() {
   };
 
   const handleDeleteStream = async (id: string) => {
-    if (!confirm("Are you sure you want to remove all custom streams for this title?")) return;
+    if (!confirm("Are you sure you want to remove all custom settings for this title?")) return;
     try {
       await deleteCustomStream(id);
       loadStreams();
@@ -557,6 +598,8 @@ function AdminPage() {
           setAdminStreams([
             { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
           ]);
+          setPerMediaServerNames({});
+          setPerMediaServerBadges({});
           setPerMediaHiddenServers([]);
           setPerMediaHideAllDefaults(false);
         }
@@ -679,7 +722,8 @@ function AdminPage() {
               <div>
                 <h2 className="text-sm sm:text-base font-bold text-white">Default Video Servers</h2>
                 <p className="text-[11px] text-neutral-400">
-                  Edit display names, badge labels, or hide individual servers across the platform.
+                  Edit display names, badge labels, or hide individual servers globally across the
+                  platform.
                 </p>
               </div>
 
@@ -818,11 +862,11 @@ function AdminPage() {
           <div className="rounded-2xl bg-[#121620] border border-white/10 p-4 sm:p-5 space-y-4 shadow-xl">
             <div>
               <h2 className="text-sm sm:text-base font-bold text-white">
-                Add or Edit Custom Streams & Visibility
+                Add or Edit Custom Streams & Server Overrides
               </h2>
               <p className="text-[11px] text-neutral-400">
                 Search any Movie, Web Series, or Anime by Title or TMDB ID. You can attach embed
-                links or only hide default servers.
+                links, rename default servers for this title, or hide servers.
               </p>
             </div>
 
@@ -995,10 +1039,11 @@ function AdminPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-neutral-300">
-                          Custom Embeds ({adminStreams.length})
+                          Custom Embed Links ({adminStreams.length})
                         </span>
                         <span className="text-[10px] text-neutral-400">
-                          Optional: Leave URL blank if you only want to hide default servers.
+                          Optional: Leave URL blank if you only want to rename or hide default
+                          servers.
                         </span>
                       </div>
                       <button
@@ -1085,12 +1130,17 @@ function AdminPage() {
                     </div>
                   </div>
 
-                  {/* Per-Media Server Visibility Controls */}
-                  <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+                  {/* Per-Media Default Server Names, Badges & Visibility */}
+                  <div className="space-y-2.5 pt-2 border-t border-white/[0.08]">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-neutral-300">
-                        Default Server Visibility for this title:
-                      </span>
+                      <div>
+                        <span className="text-xs font-bold text-neutral-300 block">
+                          Default Servers (Names, Badges & Visibility for this title):
+                        </span>
+                        <span className="text-[10px] text-neutral-400">
+                          Rename or hide default servers specifically for this title.
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setPerMediaHideAllDefaults(!perMediaHideAllDefaults)}
@@ -1114,27 +1164,79 @@ function AdminPage() {
                     </div>
 
                     {!perMediaHideAllDefaults && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      <div className="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
                         {DEFAULT_PLAY_SERVERS.map((s) => {
                           const isHidden = perMediaHiddenServers.includes(s.id);
+                          const currentName = perMediaServerNames[s.id] ?? "";
+                          const currentBadge = perMediaServerBadges[s.id] ?? "";
+
                           return (
-                            <button
-                              type="button"
+                            <div
                               key={s.id}
-                              onClick={() => togglePerMediaHide(s.id)}
-                              className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                              className={cn(
+                                "flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl border transition",
                                 isHidden
-                                  ? "bg-red-500/15 border-red-500/30 text-red-300"
-                                  : "bg-white/[0.04] border-white/[0.08] text-neutral-300 hover:text-white"
-                              }`}
-                            >
-                              <span className="truncate">{s.name}</span>
-                              {isHidden ? (
-                                <EyeOff className="w-3 h-3 text-red-400 shrink-0" />
-                              ) : (
-                                <Eye className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  ? "bg-red-500/10 border-red-500/20"
+                                  : "bg-white/[0.03] border-white/[0.06]",
                               )}
-                            </button>
+                            >
+                              <div className="flex items-center gap-2 min-w-[120px] shrink-0">
+                                <span className="text-xs font-bold text-white truncate block">
+                                  {s.name}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  value={currentName}
+                                  onChange={(e) =>
+                                    setPerMediaServerNames((prev) => ({
+                                      ...prev,
+                                      [s.id]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder={s.name}
+                                  className="flex-1 min-w-[90px] rounded-lg bg-black/40 border border-white/10 px-2.5 py-1 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-1 focus:ring-[#E50914]"
+                                />
+
+                                <input
+                                  type="text"
+                                  value={currentBadge}
+                                  onChange={(e) =>
+                                    setPerMediaServerBadges((prev) => ({
+                                      ...prev,
+                                      [s.id]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder={s.badge || "Badge"}
+                                  className="w-20 sm:w-24 rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-1 focus:ring-[#E50914]"
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => togglePerMediaHide(s.id)}
+                                  className={cn(
+                                    "flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border shrink-0",
+                                    isHidden
+                                      ? "bg-red-500/20 text-red-400 border-red-500/40"
+                                      : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20",
+                                  )}
+                                >
+                                  {isHidden ? (
+                                    <>
+                                      <EyeOff className="w-3.5 h-3.5" />
+                                      <span>Hidden</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>Visible</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
@@ -1177,7 +1279,7 @@ function AdminPage() {
                   Active Custom Configurations in Firebase
                 </h2>
                 <p className="text-[11px] text-neutral-400">
-                  Custom stream links and server visibility settings currently active in Firestore.
+                  Custom stream links and server overrides currently active in Firestore.
                 </p>
               </div>
 
@@ -1206,7 +1308,7 @@ function AdminPage() {
                 </p>
                 <p className="text-[11px] text-neutral-500 max-w-sm mx-auto">
                   Use the search box above to find any movie or series and attach your custom embed
-                  or hide servers.
+                  or customize servers.
                 </p>
               </div>
             ) : (
@@ -1239,7 +1341,7 @@ function AdminPage() {
                             ? `${streamCount} Streams`
                             : streamCount === 1
                               ? item.serverName || "Custom Stream"
-                              : "Visibility Only"}
+                              : "Overrides Only"}
                         </span>
                       </div>
 
