@@ -40,6 +40,7 @@ import {
   fetchCustomStream,
   fetchGlobalServerConfig,
   useTvEpisodeCustomLinks,
+  hasValidCustomStream,
 } from "@/lib/firebase";
 import { CustomStreamModal } from "./custom-stream-modal";
 import { BrandBadge } from "./brand-badge";
@@ -407,7 +408,7 @@ export function AnimePlayer({
   useEffect(() => {
     if (activeServers.length > 0) {
       // If custom stream was just loaded, select it immediately
-      if (customStream && customStream.customUrl) {
+      if (hasValidCustomStream(customStream)) {
         setSelectedServer(activeServers[0]);
       } else if (!activeServers.some((s) => s.id === selectedServer.id)) {
         setSelectedServer(activeServers[0]);

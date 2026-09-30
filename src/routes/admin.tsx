@@ -11,6 +11,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Eye,
   EyeOff,
   Search,
@@ -219,6 +220,22 @@ function AdminPage() {
     perMediaServerBadges,
     adminStreams,
   ]);
+
+  const [publicRuleStatus, setPublicRuleStatus] = useState<"checking" | "allowed" | "blocked">(
+    "checking",
+  );
+  const [copiedRules, setCopiedRules] = useState(false);
+
+  useEffect(() => {
+    fetch(
+      "https://firestore.googleapis.com/v1/projects/gyaanxai/databases/(default)/documents/customStreams?pageSize=1",
+    )
+      .then((res) => {
+        if (res.status === 403) setPublicRuleStatus("blocked");
+        else setPublicRuleStatus("allowed");
+      })
+      .catch(() => setPublicRuleStatus("blocked"));
+  }, []);
 
   // Live TMDB Search Debounce
   useEffect(() => {
@@ -686,6 +703,57 @@ function AdminPage() {
           </button>
         </div>
       </div>
+
+      {/* Firestore Public Read Access Alert Banner */}
+      {publicRuleStatus === "blocked" && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-3 animate-in fade-in">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1 min-w-0 flex-1">
+              <p className="font-bold text-white text-xs sm:text-sm">
+                Firebase Firestore Rules Blocking Unauthenticated Visitors
+              </p>
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                Aapke Firebase Console me public read rules block hain. Is wajah se sirf aapke
+                browser me data dikh raha hai (jahan aap admin login hain), aur doosre browsers /
+                normal users ko default servers dikh rahe hain.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-black/60 border border-white/10 space-y-2">
+            <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-400 pb-1.5 border-b border-white/10">
+              <span className="font-semibold text-neutral-300">
+                Fix in 1 Minute: Firebase Console ➔ Firestore Database ➔ Rules me paste karein:
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read: if true;\n      allow write: if request.auth != null;\n    }\n  }\n}`,
+                  );
+                  setCopiedRules(true);
+                  setTimeout(() => setCopiedRules(false), 2500);
+                }}
+                className="text-white bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition shrink-0"
+              >
+                {copiedRules ? "✓ Copied Rules!" : "Copy Rules"}
+              </button>
+            </div>
+            <pre className="text-[10px] sm:text-[11px] leading-relaxed text-amber-300 font-mono overflow-x-auto p-1">
+              {`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}`}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-white/[0.08] pb-1">
