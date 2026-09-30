@@ -15,8 +15,7 @@ import {
   EyeOff,
   Search,
   ExternalLink,
-  Tag,
-  Check,
+  Plus,
 } from "lucide-react";
 import {
   auth,
@@ -29,6 +28,7 @@ import {
   deleteCustomStream,
   fetchCustomStream,
   type CustomStreamData,
+  type CustomStreamLink,
 } from "@/lib/firebase";
 import { DEFAULT_PLAY_SERVERS } from "@/lib/viduki";
 import { searchAnime } from "@/lib/tmdb";
@@ -93,10 +93,10 @@ function AdminPage() {
   >([]);
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
 
-  // Embed Editor State
-  const [embedUrl, setEmbedUrl] = useState("");
-  const [embedServerName, setEmbedServerName] = useState("VIP Server");
-  const [embedBadge, setEmbedBadge] = useState("Custom VIP");
+  // Multiple Embed Streams State
+  const [adminStreams, setAdminStreams] = useState<CustomStreamLink[]>([
+    { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+  ]);
   const [perMediaHiddenServers, setPerMediaHiddenServers] = useState<string[]>([]);
   const [perMediaHideAllDefaults, setPerMediaHideAllDefaults] = useState(false);
   const [savingStream, setSavingStream] = useState(false);
@@ -281,18 +281,66 @@ function AdminPage() {
   ) => {
     const data = await fetchCustomStream(type, mediaId, s, ep);
     if (data) {
-      setEmbedUrl(data.customUrl || "");
-      setEmbedServerName(data.serverName || "VIP Server");
-      setEmbedBadge(data.badge || "Custom VIP");
+      if (Array.isArray(data.streams) && data.streams.length > 0) {
+        setAdminStreams(
+          data.streams.map((st, idx) => ({
+            id: st.id || `stream-${idx + 1}`,
+            serverName: st.serverName || `VIP Server ${idx + 1}`,
+            customUrl: st.customUrl || "",
+            badge: st.badge || "VIP",
+          })),
+        );
+      } else if (data.customUrl) {
+        setAdminStreams([
+          {
+            id: "stream-1",
+            serverName: data.serverName || "VIP Server",
+            customUrl: data.customUrl || "",
+            badge: data.badge || "Custom VIP",
+          },
+        ]);
+      } else {
+        setAdminStreams([
+          { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+        ]);
+      }
       setPerMediaHiddenServers(data.hiddenServers || []);
       setPerMediaHideAllDefaults(Boolean(data.hideDefaultServers));
     } else {
-      setEmbedUrl("");
-      setEmbedServerName("VIP Server");
-      setEmbedBadge("Custom VIP");
+      setAdminStreams([
+        { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+      ]);
       setPerMediaHiddenServers([]);
       setPerMediaHideAllDefaults(false);
     }
+  };
+
+  const handleAddAdminStream = () => {
+    setAdminStreams((prev) => [
+      ...prev,
+      {
+        id: `stream-${Date.now()}`,
+        serverName: `VIP Server ${prev.length + 1}`,
+        customUrl: "",
+        badge: "VIP",
+      },
+    ]);
+  };
+
+  const handleRemoveAdminStream = (index: number) => {
+    setAdminStreams((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAdminStreamChange = (
+    index: number,
+    field: "serverName" | "customUrl" | "badge",
+    val: string,
+  ) => {
+    setAdminStreams((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: val };
+      return copy;
+    });
   };
 
   const handleSaveGlobalServers = async () => {
@@ -327,17 +375,34 @@ function AdminPage() {
   const handleSaveCustomStream = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMedia) return;
-    if (!embedUrl.trim()) {
-      setStreamSaveMessage({
-        type: "error",
-        text: "Please enter a valid embed URL or iframe code.",
-      });
-      return;
+
+    // Validate streams
+    const validStreams: CustomStreamLink[] = [];
+    for (let i = 0; i < adminStreams.length; i++) {
+      const st = adminStreams[i];
+      if (st.customUrl && st.customUrl.trim()) {
+        const cleaned = cleanStreamUrl(st.customUrl.trim());
+        if (!cleaned) {
+          setStreamSaveMessage({
+            type: "error",
+            text: `Invalid stream URL format for Server #${i + 1}`,
+          });
+          return;
+        }
+        validStreams.push({
+          id: st.id || `stream-${i + 1}`,
+          serverName: st.serverName?.trim() || `VIP Server ${i + 1}`,
+          customUrl: cleaned,
+          badge: st.badge?.trim() || "VIP",
+        });
+      }
     }
 
-    const cleaned = cleanStreamUrl(embedUrl.trim());
-    if (!cleaned) {
-      setStreamSaveMessage({ type: "error", text: "Invalid stream URL format." });
+    if (validStreams.length === 0) {
+      setStreamSaveMessage({
+        type: "error",
+        text: "Please enter at least one valid embed URL or iframe code.",
+      });
       return;
     }
 
@@ -349,6 +414,8 @@ function AdminPage() {
         ? `movie_${selectedMedia.id}`
         : `tv_${selectedMedia.id}_${selectedSeason}_${selectedEpisode}`;
 
+      const primary = validStreams[0];
+
       await saveCustomStream({
         id: docId,
         mediaId: selectedMedia.id,
@@ -357,16 +424,17 @@ function AdminPage() {
         episode: selectedMedia.isMovie ? 1 : selectedEpisode,
         title: selectedMedia.title,
         poster: selectedMedia.poster,
-        customUrl: cleaned,
-        serverName: embedServerName.trim() || "VIP Server",
-        badge: embedBadge.trim() || "Custom VIP",
+        customUrl: primary.customUrl,
+        serverName: primary.serverName,
+        badge: primary.badge,
+        streams: validStreams,
         hiddenServers: perMediaHiddenServers,
         hideDefaultServers: perMediaHideAllDefaults,
       });
 
       setStreamSaveMessage({
         type: "success",
-        text: `Custom stream saved for ${selectedMedia.title} ${
+        text: `${validStreams.length} custom server(s) saved for ${selectedMedia.title} ${
           !selectedMedia.isMovie ? `(S${selectedSeason} E${selectedEpisode})` : ""
         }`,
       });
@@ -380,7 +448,7 @@ function AdminPage() {
   };
 
   const handleDeleteStream = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this custom stream?")) return;
+    if (!confirm("Are you sure you want to remove all custom streams for this title?")) return;
     try {
       await deleteCustomStream(id);
       loadStreams();
@@ -391,7 +459,7 @@ function AdminPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center pt-16 bg-[#070A12]">
+      <div className="min-h-screen flex items-center justify-center pt-4 bg-[#070A12]">
         <Loader2 className="w-8 h-8 animate-spin text-[#E50914]" />
       </div>
     );
@@ -399,7 +467,7 @@ function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-[85vh] flex items-center justify-center px-4 pt-16 bg-[#070A12]">
+      <div className="min-h-[85vh] flex items-center justify-center px-4 pt-4 bg-[#070A12]">
         <div className="w-full max-w-md rounded-3xl bg-[#121620] border border-white/10 p-8 text-center space-y-5 shadow-2xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E50914]/20 border border-[#E50914]/30 text-[#E50914]">
             <Shield className="w-7 h-7" />
@@ -433,7 +501,7 @@ function AdminPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#070A12] text-white pt-16 sm:pt-20 pb-16 px-3 sm:px-6 max-w-5xl mx-auto space-y-5">
+    <div className="min-h-screen bg-[#070A12] text-white pt-3 sm:pt-4 pb-16 px-3 sm:px-5 max-w-5xl mx-auto space-y-4">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
         <div className="flex items-center gap-3">
@@ -450,16 +518,16 @@ function AdminPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           <Link
             to="/"
-            className="rounded-xl bg-white/[0.05] hover:bg-white/10 border border-white/10 px-3.5 py-1.5 text-xs font-semibold text-neutral-300 transition"
+            className="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-semibold text-neutral-300 transition"
           >
-            Website Home
+            Back to App
           </Link>
           <button
-            onClick={() => void signOut(auth)}
-            className="flex items-center gap-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-400 transition cursor-pointer"
+            onClick={() => signOut(auth)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-xs font-semibold text-red-400 transition cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Logout</span>
@@ -467,137 +535,120 @@ function AdminPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="grid grid-cols-2 gap-1 p-1 bg-white/[0.03] border border-white/10 rounded-2xl max-w-md">
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-white/[0.08] pb-1">
         <button
           onClick={() => setActiveTab("servers")}
-          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
             activeTab === "servers"
               ? "bg-[#E50914] text-white shadow-md shadow-[#E50914]/30"
-              : "text-neutral-400 hover:text-white"
+              : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
           }`}
         >
-          <Server className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">Server Settings</span>
+          <Server className="w-4 h-4" />
+          <span>Server Settings & Badges</span>
         </button>
+
         <button
           onClick={() => setActiveTab("streams")}
-          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
             activeTab === "streams"
               ? "bg-[#E50914] text-white shadow-md shadow-[#E50914]/30"
-              : "text-neutral-400 hover:text-white"
+              : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
           }`}
         >
-          <Tv className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">Custom Streams ({customStreams.length})</span>
+          <Tv className="w-4 h-4" />
+          <span>Custom Streams ({customStreams.length})</span>
         </button>
       </div>
 
-      {/* TAB 1: Global Server Settings (Clean, Compact, Auto-Fit Sizing) */}
+      {/* TAB 1: Global Server Settings */}
       {activeTab === "servers" && (
-        <div className="space-y-4">
+        <div className="space-y-4 animate-in fade-in">
           <div className="rounded-2xl bg-[#121620] border border-white/10 p-4 sm:p-5 space-y-4 shadow-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm sm:text-base font-bold text-white">
-                  Streaming Server Names & Badges
-                </h2>
+                <h2 className="text-sm sm:text-base font-bold text-white">Default Video Servers</h2>
                 <p className="text-[11px] text-neutral-400">
-                  Edit names, badges, or hide servers across the platform. Stored in Firebase.
+                  Edit display names, badge labels, or hide individual servers across the platform.
                 </p>
               </div>
 
-              {/* Custom Styled Global Switch (No HTML checkbox) */}
+              {/* Global Hide Toggle */}
               <button
                 type="button"
                 onClick={() => setAllHidden(!allHidden)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer shrink-0 ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shrink-0 ${
                   allHidden
-                    ? "bg-red-500/15 border-red-500/30 text-red-400 shadow-sm"
-                    : "bg-white/[0.04] border-white/10 text-neutral-300 hover:text-white hover:bg-white/[0.08]"
+                    ? "bg-red-500/20 text-red-400 border-red-500/40"
+                    : "bg-white/[0.05] text-neutral-300 border-white/10 hover:text-white"
                 }`}
               >
-                <span
-                  className={`w-2 h-2 rounded-full ${allHidden ? "bg-red-500" : "bg-emerald-400"}`}
-                />
-                <span>
-                  {allHidden
-                    ? "All Default Servers Hidden"
-                    : "Hide All Defaults (Only Show Custom)"}
-                </span>
+                <EyeOff className="w-3.5 h-3.5" />
+                <span>{allHidden ? "All Default Servers Hidden" : "Hide All Default Servers"}</span>
               </button>
             </div>
 
             {configMessage && (
-              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs animate-in fade-in">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>{configMessage}</span>
               </div>
             )}
 
-            {/* Compact Dynamic Server Rows */}
+            {/* Compact Servers Rows */}
             <div className="space-y-2">
               {DEFAULT_PLAY_SERVERS.map((server) => {
-                const isHidden = hiddenServers.includes(server.id) || allHidden;
-                const customName = serverNames[server.id] ?? server.name;
-                const customBadge = serverBadges[server.id] ?? (server.badge || "");
+                const isCustomizedName = serverNames[server.id] !== undefined;
+                const isCustomizedBadge = serverBadges[server.id] !== undefined;
+                const currentName = isCustomizedName ? serverNames[server.id] : server.name;
+                const currentBadge = isCustomizedBadge
+                  ? serverBadges[server.id]
+                  : server.badge || "";
 
                 return (
                   <div
                     key={server.id}
-                    className={`flex flex-col md:flex-row md:items-center justify-between gap-2.5 p-3 rounded-xl border transition-all duration-200 ${
-                      isHidden
-                        ? "bg-white/[0.015] border-white/5 opacity-60"
-                        : "bg-white/[0.035] border-white/10"
-                    }`}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 sm:p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="px-2 py-0.5 rounded-md bg-white/[0.08] text-[10px] font-mono font-bold text-neutral-300 shrink-0">
-                        {server.id}
-                      </span>
+                    <div className="flex items-center gap-2 min-w-[130px] shrink-0">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.06] text-neutral-300">
+                        <Server className="w-3.5 h-3.5 text-[#E50914]" />
+                      </div>
                       <div className="min-w-0">
                         <span className="text-xs font-bold text-white truncate block">
                           {server.name}
                         </span>
-                        <span className="text-[10px] text-neutral-400 truncate block">
-                          {server.description}
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          ID: {server.id}
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1 md:pt-0">
-                      <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-                        <span className="text-[11px] text-neutral-400 shrink-0">Name:</span>
-                        <input
-                          type="text"
-                          value={customName}
-                          onChange={(e) =>
-                            setServerNames((prev) => ({
-                              ...prev,
-                              [server.id]: e.target.value,
-                            }))
-                          }
-                          placeholder="Server Name"
-                          className="w-full sm:w-36 rounded-lg bg-black/40 border border-white/10 px-2.5 py-1 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-1 focus:ring-[#E50914]"
-                        />
-                      </div>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {/* Name Input */}
+                      <input
+                        type="text"
+                        value={currentName}
+                        onChange={(e) =>
+                          setServerNames((prev) => ({ ...prev, [server.id]: e.target.value }))
+                        }
+                        placeholder="Server Name"
+                        className="flex-1 min-w-[110px] rounded-lg bg-black/40 border border-white/10 px-2.5 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-[#E50914]"
+                      />
 
-                      <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-                        <span className="text-[11px] text-neutral-400 shrink-0">Badge:</span>
-                        <input
-                          type="text"
-                          value={customBadge}
-                          onChange={(e) =>
-                            setServerBadges((prev) => ({
-                              ...prev,
-                              [server.id]: e.target.value,
-                            }))
-                          }
-                          placeholder="Badge"
-                          className="w-full sm:w-28 rounded-lg bg-black/40 border border-white/10 px-2.5 py-1 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-1 focus:ring-[#E50914]"
-                        />
-                      </div>
+                      {/* Badge Input */}
+                      <input
+                        type="text"
+                        value={currentBadge}
+                        onChange={(e) =>
+                          setServerBadges((prev) => ({ ...prev, [server.id]: e.target.value }))
+                        }
+                        placeholder="Badge (HD/VIP)"
+                        className="w-24 sm:w-28 rounded-lg bg-black/40 border border-white/10 px-2.5 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-[#E50914]"
+                      />
 
+                      {/* Toggle Hide */}
                       <button
                         type="button"
                         onClick={() => toggleGlobalHide(server.id)}
@@ -644,14 +695,14 @@ function AdminPage() {
         </div>
       )}
 
-      {/* TAB 2: Custom Streams Manager (With Clean, Non-Overflowing Episode Selectors) */}
+      {/* TAB 2: Custom Streams Manager */}
       {activeTab === "streams" && (
-        <div className="space-y-5">
+        <div className="space-y-4 animate-in fade-in">
           {/* Search / Select Media Box */}
           <div className="rounded-2xl bg-[#121620] border border-white/10 p-4 sm:p-5 space-y-4 shadow-xl">
             <div>
               <h2 className="text-sm sm:text-base font-bold text-white">
-                Add or Edit Custom Stream
+                Add or Edit Custom Streams
               </h2>
               <p className="text-[11px] text-neutral-400">
                 Search any Movie, Web Series, or Anime by Title or TMDB ID.
@@ -747,7 +798,7 @@ function AdminPage() {
                   </button>
                 </div>
 
-                {/* Season & Episode Selector for TV Series (Fixed Width & No Overflow) */}
+                {/* Season & Episode Selector for TV Series */}
                 {!selectedMedia.isMovie && selectedMedia.seasons && (
                   <div className="space-y-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden">
                     <div className="space-y-1.5">
@@ -803,8 +854,8 @@ function AdminPage() {
                   </div>
                 )}
 
-                {/* Embed Form */}
-                <form onSubmit={handleSaveCustomStream} className="space-y-3.5">
+                {/* Multiple Custom Embeds Form */}
+                <form onSubmit={handleSaveCustomStream} className="space-y-4">
                   {streamSaveMessage && (
                     <div
                       className={`flex items-center gap-2 p-3 rounded-xl text-xs animate-in fade-in ${
@@ -822,50 +873,99 @@ function AdminPage() {
                     </div>
                   )}
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-neutral-300 block">
-                      Custom Embed Iframe URL or Stream Link{" "}
-                      <span className="text-[#E50914]">*</span>
-                    </label>
-                    <textarea
-                      required
-                      rows={2}
-                      value={embedUrl}
-                      onChange={(e) => setEmbedUrl(e.target.value)}
-                      placeholder='Paste <iframe src="..."></iframe> or direct stream link'
-                      className="w-full rounded-xl bg-white/[0.05] border border-white/10 px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] font-mono resize-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-neutral-300 block">
-                        Display Server Name
-                      </label>
-                      <input
-                        type="text"
-                        value={embedServerName}
-                        onChange={(e) => setEmbedServerName(e.target.value)}
-                        placeholder="VIP Server"
-                        className="w-full rounded-lg bg-white/[0.05] border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#E50914]"
-                      />
+                  {/* Multiple Embed List */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-neutral-300">
+                        Configured Custom Embeds ({adminStreams.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddAdminStream}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Server</span>
+                      </button>
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-neutral-300 block">
-                        Badge Label
-                      </label>
-                      <input
-                        type="text"
-                        value={embedBadge}
-                        onChange={(e) => setEmbedBadge(e.target.value)}
-                        placeholder="Custom VIP"
-                        className="w-full rounded-lg bg-white/[0.05] border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#E50914]"
-                      />
+                    <div className="space-y-3">
+                      {adminStreams.map((st, idx) => (
+                        <div
+                          key={st.id || idx}
+                          className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                              Custom Server #{idx + 1}
+                            </span>
+                            {adminStreams.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAdminStream(idx)}
+                                className="text-neutral-400 hover:text-red-400 p-1 transition cursor-pointer"
+                                title="Remove server"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-neutral-300 block">
+                              Embed Iframe Code or Direct URL{" "}
+                              <span className="text-[#E50914]">*</span>
+                            </label>
+                            <textarea
+                              required
+                              rows={2}
+                              value={st.customUrl}
+                              onChange={(e) =>
+                                handleAdminStreamChange(idx, "customUrl", e.target.value)
+                              }
+                              placeholder='Paste <iframe src="..."></iframe> or direct stream link'
+                              className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] font-mono resize-none"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-medium text-neutral-300 block">
+                                Server Display Name
+                              </label>
+                              <input
+                                type="text"
+                                value={st.serverName}
+                                onChange={(e) =>
+                                  handleAdminStreamChange(idx, "serverName", e.target.value)
+                                }
+                                placeholder={`VIP Server ${idx + 1}`}
+                                className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#E50914]"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-medium text-neutral-300 block">
+                                Badge Label
+                              </label>
+                              <input
+                                type="text"
+                                value={st.badge || ""}
+                                onChange={(e) =>
+                                  handleAdminStreamChange(idx, "badge", e.target.value)
+                                }
+                                placeholder="VIP / HD / Hindi"
+                                className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:ring-2 focus:ring-[#E50914]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Per-Media Server Visibility Controls with Custom Pill Toggles */}
+                  {/* Per-Media Server Visibility Controls */}
                   <div className="space-y-2 pt-2 border-t border-white/[0.08]">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <span className="text-xs font-bold text-neutral-300">
@@ -887,7 +987,7 @@ function AdminPage() {
                         />
                         <span>
                           {perMediaHideAllDefaults
-                            ? "Only Custom Stream Visible"
+                            ? "Only Custom Streams Visible"
                             : "Hide All Defaults for this"}
                         </span>
                       </button>
@@ -932,7 +1032,7 @@ function AdminPage() {
                       ) : (
                         <Save className="w-4 h-4" />
                       )}
-                      <span>Save Custom Stream to Firebase</span>
+                      <span>Save All Custom Servers ({adminStreams.length})</span>
                     </button>
                   </div>
                 </form>
@@ -979,77 +1079,86 @@ function AdminPage() {
               </div>
             ) : (
               <div className="grid gap-2.5 grid-cols-1 md:grid-cols-2">
-                {filteredStreams.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-white truncate block">
-                          {item.title || `Media #${item.mediaId}`}
-                        </span>
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          {item.mediaType.toUpperCase()} · ID: {item.mediaId}{" "}
-                          {item.mediaType === "tv" && `(S${item.season} E${item.episode})`}
+                {filteredStreams.map((item) => {
+                  const streamCount =
+                    Array.isArray(item.streams) && item.streams.length > 0
+                      ? item.streams.length
+                      : 1;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-white truncate block">
+                            {item.title || `Media #${item.mediaId}`}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            {item.mediaType.toUpperCase()} · ID: {item.mediaId}{" "}
+                            {item.mediaType === "tv" && `(S${item.season} E${item.episode})`}
+                          </span>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E50914]/20 text-[#E50914] font-bold border border-[#E50914]/30 shrink-0">
+                          {streamCount > 1
+                            ? `${streamCount} Servers`
+                            : item.serverName || "Custom VIP"}
                         </span>
                       </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E50914]/20 text-[#E50914] font-bold border border-[#E50914]/30 shrink-0">
-                        {item.serverName || "Custom"}
-                      </span>
-                    </div>
 
-                    <div className="p-2 rounded-lg bg-black/50 border border-white/5 text-[10px] font-mono text-neutral-400 truncate">
-                      {item.customUrl}
-                    </div>
+                      <div className="p-2 rounded-lg bg-black/50 border border-white/5 text-[10px] font-mono text-neutral-400 truncate">
+                        {item.customUrl || (item.streams && item.streams[0]?.customUrl)}
+                      </div>
 
-                    <div className="flex items-center justify-between pt-0.5">
-                      <Link
-                        to={
-                          item.mediaType === "movie" ? "/movie/$id/watch" : "/webseries/$id/watch"
-                        }
-                        params={{ id: String(item.mediaId) }}
-                        search={
-                          item.mediaType === "tv"
-                            ? { season: item.season, episode: item.episode }
-                            : {}
-                        }
-                        className="text-[11px] font-semibold text-sky-400 hover:underline inline-flex items-center gap-1"
-                      >
-                        <span>Open in Player</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </Link>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            handleSelectMedia({
-                              id: item.mediaId,
-                              title: item.title || `Media #${item.mediaId}`,
-                              poster: item.poster,
-                            });
-                            if (item.mediaType === "tv" && item.season) {
-                              setSelectedSeason(item.season);
-                              if (item.episode) setSelectedEpisode(item.episode);
-                            }
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                          className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 text-neutral-300 hover:text-white transition cursor-pointer"
-                          title="Edit"
+                      <div className="flex items-center justify-between pt-0.5">
+                        <Link
+                          to={
+                            item.mediaType === "movie" ? "/movie/$id/watch" : "/webseries/$id/watch"
+                          }
+                          params={{ id: String(item.mediaId) }}
+                          search={
+                            item.mediaType === "tv"
+                              ? { season: item.season, episode: item.episode }
+                              : {}
+                          }
+                          className="text-[11px] font-semibold text-sky-400 hover:underline inline-flex items-center gap-1"
                         >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteStream(item.id)}
-                          className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition cursor-pointer"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          <span>Open in Player</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              handleSelectMedia({
+                                id: item.mediaId,
+                                title: item.title || `Media #${item.mediaId}`,
+                                poster: item.poster,
+                              });
+                              if (item.mediaType === "tv" && item.season) {
+                                setSelectedSeason(item.season);
+                                if (item.episode) setSelectedEpisode(item.episode);
+                              }
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 text-neutral-300 hover:text-white transition cursor-pointer"
+                            title="Edit"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteStream(item.id)}
+                            className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

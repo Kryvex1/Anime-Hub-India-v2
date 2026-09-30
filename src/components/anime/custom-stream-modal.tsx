@@ -1,11 +1,23 @@
 import { useState, useEffect } from "react";
-import { X, Tv, Save, Trash2, Loader2, CheckCircle2, AlertCircle, EyeOff, Eye } from "lucide-react";
+import {
+  X,
+  Tv,
+  Save,
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  EyeOff,
+  Eye,
+  Plus,
+} from "lucide-react";
 import { cleanStreamUrl } from "@/lib/stream-utils";
 import {
   saveCustomStream,
   deleteCustomStream,
   fetchCustomStream,
   type CustomStreamData,
+  type CustomStreamLink,
 } from "@/lib/firebase";
 import { DEFAULT_PLAY_SERVERS } from "@/lib/viduki";
 
@@ -32,9 +44,9 @@ export function CustomStreamModal({
   poster = null,
   onSaved,
 }: CustomStreamModalProps) {
-  const [customUrl, setCustomUrl] = useState("");
-  const [serverName, setServerName] = useState("Custom Server");
-  const [badge, setBadge] = useState("Custom VIP");
+  const [streams, setStreams] = useState<CustomStreamLink[]>([
+    { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+  ]);
   const [hiddenServers, setHiddenServers] = useState<string[]>([]);
   const [hideDefaultServers, setHideDefaultServers] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
@@ -63,15 +75,35 @@ export function CustomStreamModal({
     fetchCustomStream(mediaType, mediaId, season, episode).then((data) => {
       setExistingData(data);
       if (data) {
-        setCustomUrl(data.customUrl || "");
-        setServerName(data.serverName || "Custom Server");
-        setBadge(data.badge || "Custom VIP");
+        if (Array.isArray(data.streams) && data.streams.length > 0) {
+          setStreams(
+            data.streams.map((s, idx) => ({
+              id: s.id || `stream-${idx + 1}`,
+              serverName: s.serverName || `VIP Server ${idx + 1}`,
+              customUrl: s.customUrl || "",
+              badge: s.badge || "VIP",
+            })),
+          );
+        } else if (data.customUrl) {
+          setStreams([
+            {
+              id: "stream-1",
+              serverName: data.serverName || "VIP Server",
+              customUrl: data.customUrl || "",
+              badge: data.badge || "Custom VIP",
+            },
+          ]);
+        } else {
+          setStreams([
+            { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+          ]);
+        }
         setHiddenServers(data.hiddenServers || []);
         setHideDefaultServers(Boolean(data.hideDefaultServers));
       } else {
-        setCustomUrl("");
-        setServerName("Custom Server");
-        setBadge("Custom VIP");
+        setStreams([
+          { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+        ]);
         setHiddenServers([]);
         setHideDefaultServers(false);
       }
@@ -89,6 +121,34 @@ export function CustomStreamModal({
 
   if (!isOpen) return null;
 
+  const handleAddStream = () => {
+    setStreams((prev) => [
+      ...prev,
+      {
+        id: `stream-${Date.now()}`,
+        serverName: `VIP Server ${prev.length + 1}`,
+        customUrl: "",
+        badge: "VIP",
+      },
+    ]);
+  };
+
+  const handleRemoveStream = (index: number) => {
+    setStreams((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleStreamChange = (
+    index: number,
+    field: "serverName" | "customUrl" | "badge",
+    val: string,
+  ) => {
+    setStreams((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: val };
+      return copy;
+    });
+  };
+
   const handleToggleServerHide = (serverId: string) => {
     setHiddenServers((prev) =>
       prev.includes(serverId) ? prev.filter((id) => id !== serverId) : [...prev, serverId],
@@ -97,14 +157,28 @@ export function CustomStreamModal({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customUrl.trim()) {
-      setError("Please paste a valid video URL or iframe embed code.");
-      return;
+
+    // Validate streams
+    const validStreams: CustomStreamLink[] = [];
+    for (let i = 0; i < streams.length; i++) {
+      const st = streams[i];
+      if (st.customUrl && st.customUrl.trim()) {
+        const cleaned = cleanStreamUrl(st.customUrl.trim());
+        if (!cleaned) {
+          setError(`Invalid embed format for Server #${i + 1}`);
+          return;
+        }
+        validStreams.push({
+          id: st.id || `stream-${i + 1}`,
+          serverName: st.serverName?.trim() || `VIP Server ${i + 1}`,
+          customUrl: cleaned,
+          badge: st.badge?.trim() || "VIP",
+        });
+      }
     }
 
-    const cleanedUrl = cleanStreamUrl(customUrl.trim());
-    if (!cleanedUrl) {
-      setError("Invalid stream URL format.");
+    if (validStreams.length === 0) {
+      setError("Please paste at least one valid video URL or iframe embed code.");
       return;
     }
 
@@ -112,6 +186,7 @@ export function CustomStreamModal({
     setError(null);
 
     try {
+      const primary = validStreams[0];
       await saveCustomStream({
         id: mediaType === "movie" ? `movie_${mediaId}` : `tv_${mediaId}_${season}_${episode}`,
         mediaId,
@@ -120,14 +195,15 @@ export function CustomStreamModal({
         episode,
         title,
         poster,
-        customUrl: cleanedUrl,
-        serverName: serverName.trim() || "Custom Server",
-        badge: badge.trim() || "Custom VIP",
+        customUrl: primary.customUrl,
+        serverName: primary.serverName,
+        badge: primary.badge,
+        streams: validStreams,
         hiddenServers,
         hideDefaultServers,
       });
 
-      setSuccess("Custom stream & visibility settings saved to Firebase!");
+      setSuccess(`${validStreams.length} custom server(s) saved to Firebase!`);
       setTimeout(() => {
         setLoading(false);
         onClose();
@@ -135,18 +211,18 @@ export function CustomStreamModal({
       }, 700);
     } catch {
       setLoading(false);
-      setError("Failed to save stream link to Firebase. Please try again.");
+      setError("Failed to save stream links to Firebase. Please try again.");
     }
   };
 
   const handleDelete = async () => {
     if (!existingData) return;
-    if (!confirm("Are you sure you want to remove this custom stream link?")) return;
+    if (!confirm("Are you sure you want to remove all custom streams for this title?")) return;
 
     setLoading(true);
     try {
       await deleteCustomStream(existingData.id);
-      setSuccess("Custom stream removed.");
+      setSuccess("Custom streams removed.");
       setTimeout(() => {
         setLoading(false);
         onClose();
@@ -154,7 +230,7 @@ export function CustomStreamModal({
       }, 500);
     } catch {
       setLoading(false);
-      setError("Failed to delete custom stream link.");
+      setError("Failed to delete custom stream links.");
     }
   };
 
@@ -164,7 +240,7 @@ export function CustomStreamModal({
       onClick={onClose}
     >
       <div
-        className="relative my-auto w-full max-w-lg max-h-[92vh] overflow-y-auto scrollbar-none rounded-3xl bg-[#12141A] border border-white/10 p-5 sm:p-7 shadow-2xl shadow-black/90 transition-all scale-in touch-auto select-text"
+        className="relative my-auto w-full max-w-xl max-h-[90vh] overflow-y-auto scrollbar-none rounded-3xl bg-[#12141A] border border-white/10 p-4 sm:p-6 shadow-2xl shadow-black/90 transition-all scale-in touch-auto select-text"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -179,8 +255,8 @@ export function CustomStreamModal({
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E50914]/20 text-[#E50914]">
               <Tv className="w-4 h-4" />
             </span>
-            <h2 className="text-lg sm:text-xl font-bold text-white truncate">
-              {existingData ? "Edit Custom Stream" : "Add Custom Stream"}
+            <h2 className="text-base sm:text-lg font-bold text-white truncate">
+              {existingData ? "Edit Custom Streams" : "Add Custom Streams"}
             </h2>
           </div>
           <p className="text-xs text-neutral-400 truncate">
@@ -209,46 +285,93 @@ export function CustomStreamModal({
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-neutral-300 block">
-                Custom Iframe Embed URL or Video Link <span className="text-[#E50914]">*</span>
-              </label>
-              <textarea
-                required
-                rows={3}
-                value={customUrl}
-                onChange={(e) => setCustomUrl(e.target.value)}
-                placeholder='Paste <iframe src="..."></iframe> or direct stream link'
-                className="w-full rounded-xl bg-white/[0.05] border border-white/[0.08] px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] focus:border-[#E50914] font-mono resize-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-300 block">Server Name</label>
-                <input
-                  type="text"
-                  value={serverName}
-                  onChange={(e) => setServerName(e.target.value)}
-                  placeholder="VIP Server"
-                  className="w-full rounded-xl bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914]"
-                />
+            {/* Multiple Custom Stream List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-neutral-300">
+                  Custom Player Embeds ({streams.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddStream}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Server</span>
+                </button>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-300 block">Badge Label</label>
-                <input
-                  type="text"
-                  value={badge}
-                  onChange={(e) => setBadge(e.target.value)}
-                  placeholder="Custom VIP"
-                  className="w-full rounded-xl bg-white/[0.05] border border-white/[0.08] px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914]"
-                />
+              <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
+                {streams.map((st, idx) => (
+                  <div
+                    key={st.id || idx}
+                    className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-2.5 relative group"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        Server #{idx + 1}
+                      </span>
+                      {streams.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStream(idx)}
+                          className="text-neutral-400 hover:text-red-400 p-1 transition cursor-pointer"
+                          title="Remove this server"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-medium text-neutral-300 block">
+                        Embed Iframe Code or Direct URL <span className="text-[#E50914]">*</span>
+                      </label>
+                      <textarea
+                        required
+                        rows={2}
+                        value={st.customUrl}
+                        onChange={(e) => handleStreamChange(idx, "customUrl", e.target.value)}
+                        placeholder='<iframe src="https://..."></iframe> or stream url'
+                        className="w-full rounded-xl bg-black/40 border border-white/[0.08] px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] font-mono resize-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-neutral-300 block">
+                          Display Name
+                        </label>
+                        <input
+                          type="text"
+                          value={st.serverName}
+                          onChange={(e) => handleStreamChange(idx, "serverName", e.target.value)}
+                          placeholder={`VIP Server ${idx + 1}`}
+                          className="w-full rounded-xl bg-black/40 border border-white/[0.08] px-3 py-1.5 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914]"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-neutral-300 block">
+                          Badge Label
+                        </label>
+                        <input
+                          type="text"
+                          value={st.badge || ""}
+                          onChange={(e) => handleStreamChange(idx, "badge", e.target.value)}
+                          placeholder="VIP / HD / Hindi"
+                          className="w-full rounded-xl bg-black/40 border border-white/[0.08] px-3 py-1.5 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* Per-Media Server Visibility Controls */}
-            <div className="space-y-2 pt-1 border-t border-white/[0.08]">
+            <div className="space-y-2 pt-2 border-t border-white/[0.08]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-neutral-300">
                   Hide Default Servers for this Title:
@@ -303,7 +426,7 @@ export function CustomStreamModal({
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                <span>Save to Firebase</span>
+                <span>Save All Servers ({streams.length})</span>
               </button>
 
               {existingData && (
@@ -312,7 +435,7 @@ export function CustomStreamModal({
                   onClick={handleDelete}
                   disabled={loading}
                   className="flex items-center justify-center gap-1.5 rounded-xl bg-white/[0.06] hover:bg-red-500/20 hover:text-red-400 border border-white/10 px-4 py-2.5 text-xs font-semibold text-neutral-300 transition cursor-pointer"
-                  title="Remove custom link"
+                  title="Remove all custom links"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Remove</span>

@@ -328,17 +328,34 @@ export function AnimePlayer({
   const activeServers = useMemo<ServerOption[]>(() => {
     const list: ServerOption[] = [];
 
-    // 1. If custom stream exists from Firebase, add it as the primary option!
-    if (customStream && customStream.customUrl) {
-      list.push({
-        id: "custom-stream",
-        provider: "custom",
-        name: customStream.serverName || "VIP Server",
-        badge: customStream.badge || "Custom VIP",
-        description: "Custom iframe embed configured for this title",
-        customUrl: customStream.customUrl,
-        isSpecial: true,
-      });
+    // 1. If multiple custom streams exist from Firebase, add all of them
+    if (customStream) {
+      if (Array.isArray(customStream.streams) && customStream.streams.length > 0) {
+        customStream.streams.forEach((st, idx) => {
+          if (st.customUrl && st.customUrl.trim()) {
+            list.push({
+              id: st.id || `custom-stream-${idx}`,
+              provider: "custom",
+              name: st.serverName || (idx === 0 ? "VIP Server" : `VIP Server ${idx + 1}`),
+              badge: st.badge || (idx === 0 ? "Custom VIP" : `VIP ${idx + 1}`),
+              description: "Custom iframe embed configured for this title",
+              customUrl: st.customUrl.trim(),
+              isSpecial: true,
+            });
+          }
+        });
+      } else if (customStream.customUrl && customStream.customUrl.trim()) {
+        // Fallback for single custom stream
+        list.push({
+          id: "custom-stream",
+          provider: "custom",
+          name: customStream.serverName || "VIP Server",
+          badge: customStream.badge || "Custom VIP",
+          description: "Custom iframe embed configured for this title",
+          customUrl: customStream.customUrl.trim(),
+          isSpecial: true,
+        });
+      }
     }
 
     // 2. If all default servers are hidden (either globally or for this specific title)
@@ -735,32 +752,27 @@ export function AnimePlayer({
         </div>
 
         {/* 2. CINEMATIC VIDEO PLAYER (16:9 CONTAINER) */}
-        <div className="relative group">
-          {/* Subtle Red Ambient Glow */}
-          {!isFullscreen && (
-            <div className="absolute -inset-1 bg-gradient-to-r from-[#E50914]/20 via-[#E50914]/10 to-[#E50914]/20 rounded-3xl blur-2xl opacity-60 transition duration-500 pointer-events-none" />
-          )}
-
+        <div className="relative">
           <div
             ref={playerWrapperRef}
             className={cn(
               "player-container relative w-full bg-black overflow-hidden transition-all duration-300",
               isFullscreen
                 ? "w-full h-full aspect-auto rounded-none border-0 shadow-none"
-                : "aspect-video rounded-xl sm:rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] border border-white/10",
+                : "aspect-video rounded-xl sm:rounded-2xl border border-white/10",
             )}
           >
             {/* Animated Blur Loader Overlay */}
             <div
               onClick={() => setLoaderVisible(false)}
-              className={`absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col justify-center items-center gap-3.5 z-10 cursor-pointer transition-all duration-400 ${
+              className={`absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col justify-center items-center gap-3 z-10 cursor-pointer transition-all duration-300 ${
                 loaderVisible && !allServersFailed
                   ? "opacity-100 visible"
                   : "opacity-0 invisible pointer-events-none"
               }`}
             >
-              <div className="relative w-12 h-12 flex items-center justify-center bg-[#E50914]/20 border border-[#E50914]/40 rounded-2xl shadow-[0_0_25px_rgba(229,9,20,0.35)] animate-pulse">
-                <IconPlay width={20} height={20} className="text-[#E50914]" />
+              <div className="relative w-11 h-11 flex items-center justify-center bg-[#E50914]/20 border border-[#E50914]/40 rounded-2xl animate-pulse">
+                <IconPlay width={18} height={18} className="text-[#E50914]" />
               </div>
 
               <div className="h-5 text-center">
@@ -769,8 +781,8 @@ export function AnimePlayer({
                 </span>
               </div>
 
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/[0.05] border border-white/10 rounded-full text-neutral-400 text-[11px]">
-                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_6px_#34d399]" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/[0.05] border border-white/10 rounded-full text-neutral-400 text-[11px]">
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
                 {selectedServer.name}
               </div>
             </div>
@@ -778,8 +790,8 @@ export function AnimePlayer({
             {/* All Servers Failed Banner */}
             {allServersFailed ? (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/95 p-6 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E50914]/20 border border-[#E50914]/40 text-[#E50914] mb-3 shadow-[0_0_30px_rgba(229,9,20,0.3)]">
-                  <AlertTriangle className="h-7 w-7" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E50914]/20 border border-[#E50914]/40 text-[#E50914] mb-3">
+                  <AlertTriangle className="h-6 w-6" />
                 </div>
                 <h3 className="text-base sm:text-lg font-bold text-white">
                   All available servers are unavailable
@@ -788,7 +800,7 @@ export function AnimePlayer({
                   The current title is not responding on this server. You can retry with Multi
                   Server or select another server.
                 </p>
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -796,7 +808,7 @@ export function AnimePlayer({
                       setAllServersFailed(false);
                       setIframeKey((k) => k + 1);
                     }}
-                    className="flex items-center gap-1.5 rounded-lg bg-[#E50914] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#b80710] shadow-md shadow-[#E50914]/40 cursor-pointer active:scale-95"
+                    className="flex items-center gap-1.5 rounded-lg bg-[#E50914] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#b80710] cursor-pointer active:scale-95"
                   >
                     <RotateCw className="h-3.5 w-3.5" />
                     Retry Multi Server
@@ -809,9 +821,8 @@ export function AnimePlayer({
                         setAllServersFailed(false);
                         setIframeKey((k) => k + 1);
                       }}
-                      className="flex items-center gap-1.5 rounded-lg bg-white/10 px-4 py-2 text-xs font-bold text-white transition hover:bg-white/20 border border-white/10 cursor-pointer active:scale-95"
+                      className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/20 border border-white/10 cursor-pointer active:scale-95"
                     >
-                      <Server className="h-3.5 w-3.5" />
                       Try {ALL_PLAY_SERVERS[1].name}
                     </button>
                   )}
@@ -843,32 +854,29 @@ export function AnimePlayer({
 
         {/* Fallback Notice Banner */}
         {fallbackNotice && (
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-[#E50914]/15 border border-[#E50914]/30 rounded-xl text-neutral-200 text-xs">
+          <div className="flex items-center gap-2.5 px-3.5 py-2 bg-[#E50914]/15 border border-[#E50914]/30 rounded-xl text-neutral-200 text-xs">
             <AlertCircle className="w-4 h-4 text-[#E50914] shrink-0" />
             <span className="font-medium">{fallbackNotice}</span>
           </div>
         )}
 
         {/* 3. SERVER SELECTOR & CONTROLS BAR */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 sm:p-3.5 bg-[#141822] border border-white/[0.08] rounded-2xl shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-[#0D1017] border border-white/[0.08] rounded-xl">
           {/* Server Selector Tabs */}
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <span className="text-xs font-bold text-neutral-400 mr-1 flex items-center gap-1.5 shrink-0">
-              <Server className="w-3.5 h-3.5 text-[#E50914]" /> Servers:
-            </span>
-
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             {isCustomPending || isConfigPending ? (
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-20 rounded-xl bg-white/[0.06] shimmer" />
-                <div className="h-8 w-28 rounded-xl bg-white/[0.06] shimmer" />
-                <div className="h-8 w-24 rounded-xl bg-white/[0.06] shimmer" />
+              <div className="flex items-center gap-1.5">
+                <div className="h-6 w-16 rounded-lg bg-white/[0.06] shimmer" />
+                <div className="h-6 w-20 rounded-lg bg-white/[0.06] shimmer" />
+                <div className="h-6 w-16 rounded-lg bg-white/[0.06] shimmer" />
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1 flex-wrap">
                 {activeServers.map((server) => {
                   const isSelected = selectedServer.id === server.id;
                   const isHindi = server.id === "viduki-2";
-                  const isCustom = server.id === "custom-stream";
+                  const isCustom =
+                    server.provider === "custom" || server.id.startsWith("custom-stream");
 
                   return (
                     <button
@@ -880,11 +888,11 @@ export function AnimePlayer({
                         setIframeKey((k) => k + 1);
                       }}
                       className={cn(
-                        "px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95",
+                        "px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95",
                         isSelected
                           ? isCustom
-                            ? "bg-amber-500 text-black font-bold border border-amber-400 shadow-md shadow-amber-500/20"
-                            : "bg-[#E50914] text-white font-bold border border-[#ff3b47] shadow-md shadow-[#E50914]/30"
+                            ? "bg-amber-500 text-black font-bold border border-amber-400"
+                            : "bg-[#E50914] text-white font-bold border border-[#ff3b47]"
                           : isHindi
                             ? "bg-white/[0.04] text-neutral-200 hover:text-white hover:bg-white/[0.08] border border-orange-500/30"
                             : isCustom
@@ -898,7 +906,7 @@ export function AnimePlayer({
                           isSelected
                             ? isCustom
                               ? "bg-black"
-                              : "bg-white animate-pulse"
+                              : "bg-white"
                             : isHindi
                               ? "bg-orange-400"
                               : isCustom
@@ -906,11 +914,11 @@ export function AnimePlayer({
                                 : "bg-emerald-400",
                         )}
                       />
-                      <span>{server.name}</span>
+                      <span className="truncate max-w-[120px]">{server.name}</span>
                       {server.badge && (
                         <span
                           className={cn(
-                            "text-[10px] px-1.5 py-0.5 rounded font-medium tracking-tight",
+                            "text-[9px] px-1 py-0.2 rounded font-bold tracking-tight",
                             isSelected
                               ? isCustom
                                 ? "bg-black/20 text-black"
@@ -933,16 +941,16 @@ export function AnimePlayer({
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-end lg:self-auto">
+          <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-[11px] font-bold transition active:scale-95 cursor-pointer"
                 title="Admin: Edit or Add Custom Stream Embed"
               >
-                <Edit className="w-3.5 h-3.5" />
-                <span>{customStream ? "Edit Stream" : "Add Stream"}</span>
+                <Edit className="w-3 h-3" />
+                <span>{customStream ? "Edit Streams" : "Add Stream"}</span>
               </button>
             )}
 

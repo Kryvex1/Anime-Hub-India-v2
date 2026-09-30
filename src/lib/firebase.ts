@@ -28,6 +28,13 @@ export const db =
     ? getFirestore(app, firebaseConfig.firestoreDatabaseId as string)
     : getFirestore(app);
 
+export interface CustomStreamLink {
+  id?: string;
+  serverName: string;
+  customUrl: string;
+  badge?: string;
+}
+
 export interface CustomStreamData {
   id: string; // e.g. "movie_12345" or "tv_12345_1_1"
   mediaId: number;
@@ -36,9 +43,10 @@ export interface CustomStreamData {
   episode?: number;
   title?: string;
   poster?: string | null;
-  customUrl: string; // iframe embed url
+  customUrl?: string; // iframe embed url (primary/fallback)
   serverName?: string;
   badge?: string;
+  streams?: CustomStreamLink[]; // Multiple custom stream sources
   hiddenServers?: string[]; // Specific default server IDs hidden for this title/episode
   hideDefaultServers?: boolean; // If true, hide all default servers for this specific title
   updatedAt?: string;
