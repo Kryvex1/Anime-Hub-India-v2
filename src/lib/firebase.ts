@@ -61,9 +61,35 @@ export interface GlobalServerConfig {
   updatedAt?: string;
 }
 
-// In-memory quick caches for zero-latency retrieval
+// In-memory & Session quick caches for zero-latency retrieval & minimal Firestore reads
 const customStreamCache = new Map<string, { at: number; data: CustomStreamData | null }>();
 let globalConfigCache: { at: number; data: GlobalServerConfig | null } | null = null;
+
+const FB_STORAGE_PREFIX = "fb_cache_";
+
+function getFbSession<T>(key: string): T | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = sessionStorage.getItem(FB_STORAGE_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.at < 1000 * 60 * 10) {
+      return parsed.data as T;
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+function setFbSession(key: string, data: unknown) {
+  try {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(FB_STORAGE_PREFIX + key, JSON.stringify({ at: Date.now(), data }));
+  } catch {
+    // Ignore
+  }
+}
 
 export function getStreamDocId(
   mediaType: "movie" | "tv",
@@ -89,8 +115,14 @@ export async function fetchCustomStream(
   const docId = getStreamDocId(mediaType, mediaId, season, episode);
   const now = Date.now();
   const cached = customStreamCache.get(docId);
-  if (cached && now - cached.at < 1000 * 60 * 5) {
+  if (cached && now - cached.at < 1000 * 60 * 10) {
     return cached.data;
+  }
+
+  const sessionData = getFbSession<CustomStreamData>(`stream_${docId}`);
+  if (sessionData !== null) {
+    customStreamCache.set(docId, { at: now, data: sessionData });
+    return sessionData;
   }
 
   try {
@@ -99,9 +131,11 @@ export async function fetchCustomStream(
     if (snap.exists()) {
       const data = { id: snap.id, ...snap.data() } as CustomStreamData;
       customStreamCache.set(docId, { at: now, data });
+      setFbSession(`stream_${docId}`, data);
       return data;
     }
     customStreamCache.set(docId, { at: now, data: null });
+    setFbSession(`stream_${docId}`, null);
     return null;
   } catch (err) {
     console.warn("Error fetching custom stream:", err);
@@ -124,6 +158,7 @@ export async function saveCustomStream(stream: CustomStreamData): Promise<void> 
   };
   await setDoc(docRef, payload, { merge: true });
   customStreamCache.set(docId, { at: Date.now(), data: payload });
+  setFbSession(`stream_${docId}`, payload);
 }
 
 /**
@@ -133,16 +168,26 @@ export async function deleteCustomStream(docId: string): Promise<void> {
   const docRef = doc(db, "customStreams", docId);
   await deleteDoc(docRef);
   customStreamCache.delete(docId);
+  try {
+    sessionStorage.removeItem(FB_STORAGE_PREFIX + `stream_${docId}`);
+  } catch {
+    // Ignore
+  }
 }
 
 /**
  * Fetch all configured custom streams (for admin overview)
  */
 export async function fetchAllCustomStreams(): Promise<CustomStreamData[]> {
+  const sessionAll = getFbSession<CustomStreamData[]>("all_custom_streams");
+  if (sessionAll) return sessionAll;
+
   try {
     const colRef = collection(db, "customStreams");
     const snap = await getDocs(colRef);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CustomStreamData);
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CustomStreamData);
+    setFbSession("all_custom_streams", list);
+    return list;
   } catch (err) {
     console.warn("Error fetching all custom streams:", err);
     return [];
@@ -154,8 +199,14 @@ export async function fetchAllCustomStreams(): Promise<CustomStreamData[]> {
  */
 export async function fetchGlobalServerConfig(): Promise<GlobalServerConfig> {
   const now = Date.now();
-  if (globalConfigCache && now - globalConfigCache.at < 1000 * 60 * 5) {
+  if (globalConfigCache && now - globalConfigCache.at < 1000 * 60 * 10) {
     return globalConfigCache.data || {};
+  }
+
+  const sessionConfig = getFbSession<GlobalServerConfig>("global_server_config");
+  if (sessionConfig) {
+    globalConfigCache = { at: now, data: sessionConfig };
+    return sessionConfig;
   }
 
   try {
@@ -164,6 +215,7 @@ export async function fetchGlobalServerConfig(): Promise<GlobalServerConfig> {
     if (snap.exists()) {
       const data = snap.data() as GlobalServerConfig;
       globalConfigCache = { at: now, data };
+      setFbSession("global_server_config", data);
       return data;
     }
     return {};
@@ -184,6 +236,7 @@ export async function saveGlobalServerConfig(config: GlobalServerConfig): Promis
   };
   await setDoc(docRef, payload, { merge: true });
   globalConfigCache = { at: Date.now(), data: payload };
+  setFbSession("global_server_config", payload);
 }
 
 /**

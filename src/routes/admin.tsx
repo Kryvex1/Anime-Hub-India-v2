@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Shield,
@@ -29,6 +29,7 @@ import {
   fetchCustomStream,
   type CustomStreamData,
   type CustomStreamLink,
+  type GlobalServerConfig,
 } from "@/lib/firebase";
 import { DEFAULT_PLAY_SERVERS } from "@/lib/viduki";
 import { searchAnime } from "@/lib/tmdb";
@@ -36,6 +37,7 @@ import { fetchShow, fetchSeason } from "@/lib/anime.functions";
 import { cleanStreamUrl } from "@/lib/stream-utils";
 import { LoginModal } from "@/components/anime/login-modal";
 import { Img, img } from "@/components/anime/media";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -54,6 +56,7 @@ function AdminPage() {
   const [serverBadges, setServerBadges] = useState<Record<string, string>>({});
   const [hiddenServers, setHiddenServers] = useState<string[]>([]);
   const [allHidden, setAllHidden] = useState<boolean>(false);
+  const [initialGlobalConfig, setInitialGlobalConfig] = useState<GlobalServerConfig | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
 
@@ -99,6 +102,7 @@ function AdminPage() {
   ]);
   const [perMediaHiddenServers, setPerMediaHiddenServers] = useState<string[]>([]);
   const [perMediaHideAllDefaults, setPerMediaHideAllDefaults] = useState(false);
+  const [initialMediaData, setInitialMediaData] = useState<CustomStreamData | null>(null);
   const [savingStream, setSavingStream] = useState(false);
   const [streamSaveMessage, setStreamSaveMessage] = useState<{
     type: "success" | "error";
@@ -113,6 +117,7 @@ function AdminPage() {
         setServerBadges(cfg.serverBadges || {});
         setHiddenServers(cfg.hiddenServers || []);
         setAllHidden(Boolean(cfg.allHidden));
+        setInitialGlobalConfig(cfg);
       });
 
       // Load all custom streams
@@ -127,6 +132,73 @@ function AdminPage() {
       setStreamsLoading(false);
     });
   };
+
+  // Check if global server settings have changed
+  const isConfigDirty = useMemo(() => {
+    if (!initialGlobalConfig) return false;
+
+    if (Boolean(allHidden) !== Boolean(initialGlobalConfig.allHidden)) return true;
+
+    const prevHidden = (initialGlobalConfig.hiddenServers || []).slice().sort();
+    const currHidden = hiddenServers.slice().sort();
+    if (prevHidden.length !== currHidden.length) return true;
+    for (let i = 0; i < prevHidden.length; i++) {
+      if (prevHidden[i] !== currHidden[i]) return true;
+    }
+
+    const prevNames = initialGlobalConfig.serverNames || {};
+    for (const key of Object.keys({ ...prevNames, ...serverNames })) {
+      if ((serverNames[key] || "").trim() !== (prevNames[key] || "").trim()) return true;
+    }
+
+    const prevBadges = initialGlobalConfig.serverBadges || {};
+    for (const key of Object.keys({ ...prevBadges, ...serverBadges })) {
+      if ((serverBadges[key] || "").trim() !== (prevBadges[key] || "").trim()) return true;
+    }
+
+    return false;
+  }, [initialGlobalConfig, allHidden, hiddenServers, serverNames, serverBadges]);
+
+  // Check if media stream or visibility settings have changed
+  const isMediaDirty = useMemo(() => {
+    const prevHideAll = Boolean(initialMediaData?.hideDefaultServers);
+    if (perMediaHideAllDefaults !== prevHideAll) return true;
+
+    const prevHidden = (initialMediaData?.hiddenServers || []).slice().sort();
+    const currHidden = perMediaHiddenServers.slice().sort();
+    if (prevHidden.length !== currHidden.length) return true;
+    for (let i = 0; i < prevHidden.length; i++) {
+      if (prevHidden[i] !== currHidden[i]) return true;
+    }
+
+    const existingStreams =
+      Array.isArray(initialMediaData?.streams) && initialMediaData!.streams.length > 0
+        ? initialMediaData!.streams
+        : initialMediaData?.customUrl
+          ? [
+              {
+                serverName: initialMediaData.serverName || "VIP Server",
+                customUrl: initialMediaData.customUrl,
+                badge: initialMediaData.badge || "VIP",
+              },
+            ]
+          : [];
+
+    const activeStreams = adminStreams.filter((s) => s.customUrl && s.customUrl.trim());
+
+    if (activeStreams.length !== existingStreams.length) return true;
+
+    for (let i = 0; i < activeStreams.length; i++) {
+      const a = activeStreams[i];
+      const b = existingStreams[i];
+      if (!b) return true;
+      if (a.customUrl.trim() !== (b.customUrl || "").trim()) return true;
+      if ((a.serverName || "").trim() !== (b.serverName || "").trim()) return true;
+      if ((a.badge || "").trim() !== (b.badge || "").trim()) return true;
+    }
+
+    return false;
+  }, [initialMediaData, perMediaHideAllDefaults, perMediaHiddenServers, adminStreams]);
 
   // Live TMDB Search Debounce
   useEffect(() => {
@@ -280,6 +352,7 @@ function AdminPage() {
     ep: number,
   ) => {
     const data = await fetchCustomStream(type, mediaId, s, ep);
+    setInitialMediaData(data);
     if (data) {
       if (Array.isArray(data.streams) && data.streams.length > 0) {
         setAdminStreams(
@@ -344,15 +417,18 @@ function AdminPage() {
   };
 
   const handleSaveGlobalServers = async () => {
+    if (!isConfigDirty) return;
     setConfigSaving(true);
     setConfigMessage(null);
     try {
-      await saveGlobalServerConfig({
+      const payload: GlobalServerConfig = {
         serverNames,
         serverBadges,
         hiddenServers,
         allHidden,
-      });
+      };
+      await saveGlobalServerConfig(payload);
+      setInitialGlobalConfig(payload);
       setConfigMessage("Server settings & badges saved to Firebase!");
       setTimeout(() => setConfigMessage(null), 3000);
     } catch {
@@ -374,9 +450,9 @@ function AdminPage() {
 
   const handleSaveCustomStream = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMedia) return;
+    if (!selectedMedia || !isMediaDirty) return;
 
-    // Validate streams
+    // Validate streams if user entered any URL
     const validStreams: CustomStreamLink[] = [];
     for (let i = 0; i < adminStreams.length; i++) {
       const st = adminStreams[i];
@@ -398,25 +474,42 @@ function AdminPage() {
       }
     }
 
-    if (validStreams.length === 0) {
-      setStreamSaveMessage({
-        type: "error",
-        text: "Please enter at least one valid embed URL or iframe code.",
-      });
-      return;
+    const docId = selectedMedia.isMovie
+      ? `movie_${selectedMedia.id}`
+      : `tv_${selectedMedia.id}_${selectedSeason}_${selectedEpisode}`;
+
+    // If no custom embeds and no hidden servers and not hideAll, clean up doc
+    if (
+      validStreams.length === 0 &&
+      perMediaHiddenServers.length === 0 &&
+      !perMediaHideAllDefaults
+    ) {
+      if (initialMediaData) {
+        setSavingStream(true);
+        try {
+          await deleteCustomStream(docId);
+          setInitialMediaData(null);
+          setStreamSaveMessage({ type: "success", text: "Custom settings cleared." });
+          loadStreams();
+          setTimeout(() => setStreamSaveMessage(null), 3000);
+        } catch {
+          setStreamSaveMessage({ type: "error", text: "Failed to clear settings." });
+        } finally {
+          setSavingStream(false);
+        }
+        return;
+      } else {
+        return;
+      }
     }
 
     setSavingStream(true);
     setStreamSaveMessage(null);
 
     try {
-      const docId = selectedMedia.isMovie
-        ? `movie_${selectedMedia.id}`
-        : `tv_${selectedMedia.id}_${selectedSeason}_${selectedEpisode}`;
-
       const primary = validStreams[0];
 
-      await saveCustomStream({
+      const payload: CustomStreamData = {
         id: docId,
         mediaId: selectedMedia.id,
         mediaType: selectedMedia.isMovie ? "movie" : "tv",
@@ -424,17 +517,20 @@ function AdminPage() {
         episode: selectedMedia.isMovie ? 1 : selectedEpisode,
         title: selectedMedia.title,
         poster: selectedMedia.poster,
-        customUrl: primary.customUrl,
-        serverName: primary.serverName,
-        badge: primary.badge,
+        customUrl: primary ? primary.customUrl : "",
+        serverName: primary ? primary.serverName : "",
+        badge: primary ? primary.badge : "",
         streams: validStreams,
         hiddenServers: perMediaHiddenServers,
         hideDefaultServers: perMediaHideAllDefaults,
-      });
+      };
+
+      await saveCustomStream(payload);
+      setInitialMediaData(payload);
 
       setStreamSaveMessage({
         type: "success",
-        text: `${validStreams.length} custom server(s) saved for ${selectedMedia.title} ${
+        text: `Settings saved for ${selectedMedia.title} ${
           !selectedMedia.isMovie ? `(S${selectedSeason} E${selectedEpisode})` : ""
         }`,
       });
@@ -452,6 +548,19 @@ function AdminPage() {
     try {
       await deleteCustomStream(id);
       loadStreams();
+      if (selectedMedia) {
+        const docId = selectedMedia.isMovie
+          ? `movie_${selectedMedia.id}`
+          : `tv_${selectedMedia.id}_${selectedSeason}_${selectedEpisode}`;
+        if (id === docId) {
+          setInitialMediaData(null);
+          setAdminStreams([
+            { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+          ]);
+          setPerMediaHiddenServers([]);
+          setPerMediaHideAllDefaults(false);
+        }
+      }
     } catch {
       alert("Failed to delete stream link.");
     }
@@ -505,7 +614,7 @@ function AdminPage() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-[#E50914]/20 border border-[#E50914]/30 text-[#E50914] shadow-md shadow-[#E50914]/20 shrink-0">
+          <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-[#E50914]/20 border border-[#E50914]/30 text-[#E50914] shrink-0">
             <Shield className="w-5 h-5" />
           </div>
           <div className="min-w-0">
@@ -680,15 +789,22 @@ function AdminPage() {
               <button
                 type="button"
                 onClick={handleSaveGlobalServers}
-                disabled={configSaving}
-                className="flex items-center gap-2 rounded-xl bg-[#E50914] hover:bg-[#b80710] px-5 py-2 text-xs font-bold text-white shadow-lg shadow-[#E50914]/25 transition disabled:opacity-60 cursor-pointer"
+                disabled={configSaving || !isConfigDirty}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl px-5 py-2 text-xs font-bold transition cursor-pointer",
+                  isConfigDirty && !configSaving
+                    ? "bg-[#E50914] hover:bg-[#b80710] text-white shadow-lg shadow-[#E50914]/25 active:scale-95"
+                    : "bg-white/[0.06] text-neutral-500 border border-white/[0.06] cursor-not-allowed opacity-60",
+                )}
               >
                 {configSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                <span>Save All Server Configs to Firebase</span>
+                <span>
+                  {isConfigDirty ? "Save All Server Configs to Firebase" : "No Changes to Save"}
+                </span>
               </button>
             </div>
           </div>
@@ -702,10 +818,11 @@ function AdminPage() {
           <div className="rounded-2xl bg-[#121620] border border-white/10 p-4 sm:p-5 space-y-4 shadow-xl">
             <div>
               <h2 className="text-sm sm:text-base font-bold text-white">
-                Add or Edit Custom Streams
+                Add or Edit Custom Streams & Visibility
               </h2>
               <p className="text-[11px] text-neutral-400">
-                Search any Movie, Web Series, or Anime by Title or TMDB ID.
+                Search any Movie, Web Series, or Anime by Title or TMDB ID. You can attach embed
+                links or only hide default servers.
               </p>
             </div>
 
@@ -770,7 +887,7 @@ function AdminPage() {
                 {/* Media Banner */}
                 <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-14 w-10 shrink-0 rounded-xl overflow-hidden bg-black shadow-md border border-white/10">
+                    <div className="h-14 w-10 shrink-0 rounded-xl overflow-hidden bg-black border border-white/10">
                       <Img
                         src={img(selectedMedia.poster, "w200")}
                         alt={selectedMedia.title}
@@ -876,13 +993,18 @@ function AdminPage() {
                   {/* Multiple Embed List */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-neutral-300">
-                        Configured Custom Embeds ({adminStreams.length})
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-neutral-300">
+                          Custom Embeds ({adminStreams.length})
+                        </span>
+                        <span className="text-[10px] text-neutral-400">
+                          Optional: Leave URL blank if you only want to hide default servers.
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={handleAddAdminStream}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add Server</span>
@@ -914,17 +1036,15 @@ function AdminPage() {
 
                           <div className="space-y-1">
                             <label className="text-[11px] font-medium text-neutral-300 block">
-                              Embed Iframe Code or Direct URL{" "}
-                              <span className="text-[#E50914]">*</span>
+                              Embed Iframe Code or Direct URL (Optional)
                             </label>
                             <textarea
-                              required
                               rows={2}
                               value={st.customUrl}
                               onChange={(e) =>
                                 handleAdminStreamChange(idx, "customUrl", e.target.value)
                               }
-                              placeholder='Paste <iframe src="..."></iframe> or direct stream link'
+                              placeholder='Paste <iframe src="..."></iframe> or direct stream link (optional)'
                               className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] font-mono resize-none"
                             />
                           </div>
@@ -1024,15 +1144,24 @@ function AdminPage() {
                   <div className="pt-2 flex items-center gap-2">
                     <button
                       type="submit"
-                      disabled={savingStream}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#E50914] hover:bg-[#b80710] py-2.5 text-xs font-bold text-white shadow-lg shadow-[#E50914]/25 transition disabled:opacity-60 cursor-pointer"
+                      disabled={savingStream || !isMediaDirty}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition cursor-pointer",
+                        isMediaDirty && !savingStream
+                          ? "bg-[#E50914] hover:bg-[#b80710] text-white shadow-lg shadow-[#E50914]/25 active:scale-95"
+                          : "bg-white/[0.06] text-neutral-500 border border-white/[0.06] cursor-not-allowed opacity-60",
+                      )}
                     >
                       {savingStream ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <Save className="w-4 h-4" />
                       )}
-                      <span>Save All Custom Servers ({adminStreams.length})</span>
+                      <span>
+                        {isMediaDirty
+                          ? `Save Settings to Firebase (${adminStreams.filter((s) => s.customUrl?.trim()).length} stream(s))`
+                          : "No Changes to Save"}
+                      </span>
                     </button>
                   </div>
                 </form>
@@ -1045,10 +1174,10 @@ function AdminPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm sm:text-base font-bold text-white">
-                  Active Custom Streams in Firebase
+                  Active Custom Configurations in Firebase
                 </h2>
                 <p className="text-[11px] text-neutral-400">
-                  Custom stream links currently active in your Firestore database.
+                  Custom stream links and server visibility settings currently active in Firestore.
                 </p>
               </div>
 
@@ -1072,9 +1201,12 @@ function AdminPage() {
             ) : filteredStreams.length === 0 ? (
               <div className="py-8 text-center space-y-2 border border-dashed border-white/10 rounded-2xl">
                 <Tv className="w-7 h-7 text-neutral-500 mx-auto" />
-                <p className="text-xs font-semibold text-neutral-300">No Custom Streams Stored</p>
+                <p className="text-xs font-semibold text-neutral-300">
+                  No Custom Configurations Stored
+                </p>
                 <p className="text-[11px] text-neutral-500 max-w-sm mx-auto">
-                  Use the search box above to find any movie or series and attach your custom embed.
+                  Use the search box above to find any movie or series and attach your custom embed
+                  or hide servers.
                 </p>
               </div>
             ) : (
@@ -1083,7 +1215,9 @@ function AdminPage() {
                   const streamCount =
                     Array.isArray(item.streams) && item.streams.length > 0
                       ? item.streams.length
-                      : 1;
+                      : item.customUrl
+                        ? 1
+                        : 0;
 
                   return (
                     <div
@@ -1102,13 +1236,19 @@ function AdminPage() {
                         </div>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E50914]/20 text-[#E50914] font-bold border border-[#E50914]/30 shrink-0">
                           {streamCount > 1
-                            ? `${streamCount} Servers`
-                            : item.serverName || "Custom VIP"}
+                            ? `${streamCount} Streams`
+                            : streamCount === 1
+                              ? item.serverName || "Custom Stream"
+                              : "Visibility Only"}
                         </span>
                       </div>
 
                       <div className="p-2 rounded-lg bg-black/50 border border-white/5 text-[10px] font-mono text-neutral-400 truncate">
-                        {item.customUrl || (item.streams && item.streams[0]?.customUrl)}
+                        {item.customUrl ||
+                          (item.streams && item.streams[0]?.customUrl) ||
+                          (item.hideDefaultServers
+                            ? "All Default Servers Hidden"
+                            : `${item.hiddenServers?.length || 0} Default Server(s) Hidden`)}
                       </div>
 
                       <div className="flex items-center justify-between pt-0.5">

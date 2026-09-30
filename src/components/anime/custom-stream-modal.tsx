@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   X,
   Tv,
@@ -20,6 +20,7 @@ import {
   type CustomStreamLink,
 } from "@/lib/firebase";
 import { DEFAULT_PLAY_SERVERS } from "@/lib/viduki";
+import { cn } from "@/lib/utils";
 
 interface CustomStreamModalProps {
   isOpen: boolean;
@@ -119,6 +120,51 @@ export function CustomStreamModal({
     };
   }, [isOpen, mediaId, mediaType, season, episode]);
 
+  // Dirty checking to enable Save button only when actual changes are made
+  const isDirty = useMemo(() => {
+    if (fetching) return false;
+
+    // Check visibility flags
+    const prevHideAll = Boolean(existingData?.hideDefaultServers);
+    if (hideDefaultServers !== prevHideAll) return true;
+
+    const prevHidden = (existingData?.hiddenServers || []).slice().sort();
+    const currHidden = hiddenServers.slice().sort();
+    if (prevHidden.length !== currHidden.length) return true;
+    for (let i = 0; i < prevHidden.length; i++) {
+      if (prevHidden[i] !== currHidden[i]) return true;
+    }
+
+    // Check custom streams
+    const existingStreams =
+      Array.isArray(existingData?.streams) && existingData!.streams.length > 0
+        ? existingData!.streams
+        : existingData?.customUrl
+          ? [
+              {
+                serverName: existingData.serverName || "VIP Server",
+                customUrl: existingData.customUrl,
+                badge: existingData.badge || "VIP",
+              },
+            ]
+          : [];
+
+    const activeStreams = streams.filter((s) => s.customUrl && s.customUrl.trim());
+
+    if (activeStreams.length !== existingStreams.length) return true;
+
+    for (let i = 0; i < activeStreams.length; i++) {
+      const a = activeStreams[i];
+      const b = existingStreams[i];
+      if (!b) return true;
+      if (a.customUrl.trim() !== (b.customUrl || "").trim()) return true;
+      if ((a.serverName || "").trim() !== (b.serverName || "").trim()) return true;
+      if ((a.badge || "").trim() !== (b.badge || "").trim()) return true;
+    }
+
+    return false;
+  }, [fetching, existingData, hideDefaultServers, hiddenServers, streams]);
+
   if (!isOpen) return null;
 
   const handleAddStream = () => {
@@ -157,8 +203,9 @@ export function CustomStreamModal({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isDirty) return;
 
-    // Validate streams
+    // Validate streams if user entered anything in customUrl
     const validStreams: CustomStreamLink[] = [];
     for (let i = 0; i < streams.length; i++) {
       const st = streams[i];
@@ -177,9 +224,29 @@ export function CustomStreamModal({
       }
     }
 
-    if (validStreams.length === 0) {
-      setError("Please paste at least one valid video URL or iframe embed code.");
-      return;
+    const docId = mediaType === "movie" ? `movie_${mediaId}` : `tv_${mediaId}_${season}_${episode}`;
+
+    // If no streams and no hidden servers and not hideAll, clean up doc if exists
+    if (validStreams.length === 0 && hiddenServers.length === 0 && !hideDefaultServers) {
+      if (existingData) {
+        setLoading(true);
+        try {
+          await deleteCustomStream(docId);
+          setSuccess("Settings cleared.");
+          setTimeout(() => {
+            setLoading(false);
+            onClose();
+            if (onSaved) onSaved();
+          }, 500);
+        } catch {
+          setLoading(false);
+          setError("Failed to clear settings.");
+        }
+        return;
+      } else {
+        onClose();
+        return;
+      }
     }
 
     setLoading(true);
@@ -188,41 +255,41 @@ export function CustomStreamModal({
     try {
       const primary = validStreams[0];
       await saveCustomStream({
-        id: mediaType === "movie" ? `movie_${mediaId}` : `tv_${mediaId}_${season}_${episode}`,
+        id: docId,
         mediaId,
         mediaType,
         season,
         episode,
         title,
         poster,
-        customUrl: primary.customUrl,
-        serverName: primary.serverName,
-        badge: primary.badge,
+        customUrl: primary ? primary.customUrl : "",
+        serverName: primary ? primary.serverName : "",
+        badge: primary ? primary.badge : "",
         streams: validStreams,
         hiddenServers,
         hideDefaultServers,
       });
 
-      setSuccess(`${validStreams.length} custom server(s) saved to Firebase!`);
+      setSuccess("Changes saved successfully to Firebase!");
       setTimeout(() => {
         setLoading(false);
         onClose();
         if (onSaved) onSaved();
-      }, 700);
+      }, 600);
     } catch {
       setLoading(false);
-      setError("Failed to save stream links to Firebase. Please try again.");
+      setError("Failed to save to Firebase. Please try again.");
     }
   };
 
   const handleDelete = async () => {
     if (!existingData) return;
-    if (!confirm("Are you sure you want to remove all custom streams for this title?")) return;
+    if (!confirm("Are you sure you want to remove all custom settings for this title?")) return;
 
     setLoading(true);
     try {
       await deleteCustomStream(existingData.id);
-      setSuccess("Custom streams removed.");
+      setSuccess("Custom settings removed.");
       setTimeout(() => {
         setLoading(false);
         onClose();
@@ -230,7 +297,7 @@ export function CustomStreamModal({
       }, 500);
     } catch {
       setLoading(false);
-      setError("Failed to delete custom stream links.");
+      setError("Failed to delete custom stream.");
     }
   };
 
@@ -256,7 +323,9 @@ export function CustomStreamModal({
               <Tv className="w-4 h-4" />
             </span>
             <h2 className="text-base sm:text-lg font-bold text-white truncate">
-              {existingData ? "Edit Custom Streams" : "Add Custom Streams"}
+              {existingData
+                ? "Edit Custom Streams & Visibility"
+                : "Add Custom Streams & Visibility"}
             </h2>
           </div>
           <p className="text-xs text-neutral-400 truncate">
@@ -285,23 +354,28 @@ export function CustomStreamModal({
               </div>
             )}
 
-            {/* Multiple Custom Stream List */}
+            {/* Multiple Custom Stream List (Optional) */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-neutral-300">
-                  Custom Player Embeds ({streams.length})
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-neutral-300">
+                    Custom Player Embeds ({streams.length})
+                  </span>
+                  <span className="text-[10px] text-neutral-400">
+                    Optional: Leave empty if you only want to hide default servers.
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={handleAddStream}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-xs font-bold transition active:scale-95 cursor-pointer shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Server</span>
                 </button>
               </div>
 
-              <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
                 {streams.map((st, idx) => (
                   <div
                     key={st.id || idx}
@@ -310,7 +384,7 @@ export function CustomStreamModal({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                        Server #{idx + 1}
+                        Custom Server #{idx + 1}
                       </span>
                       {streams.length > 1 && (
                         <button
@@ -326,14 +400,13 @@ export function CustomStreamModal({
 
                     <div className="space-y-1">
                       <label className="text-[11px] font-medium text-neutral-300 block">
-                        Embed Iframe Code or Direct URL <span className="text-[#E50914]">*</span>
+                        Embed Iframe Code or Direct URL (Optional)
                       </label>
                       <textarea
-                        required
                         rows={2}
                         value={st.customUrl}
                         onChange={(e) => handleStreamChange(idx, "customUrl", e.target.value)}
-                        placeholder='<iframe src="https://..."></iframe> or stream url'
+                        placeholder='<iframe src="https://..."></iframe> or stream url (leave blank if none)'
                         className="w-full rounded-xl bg-black/40 border border-white/[0.08] px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] font-mono resize-none"
                       />
                     </div>
@@ -418,15 +491,20 @@ export function CustomStreamModal({
             <div className="flex items-center gap-2 pt-2">
               <button
                 type="submit"
-                disabled={loading}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#E50914] hover:bg-[#b80710] py-2.5 text-xs sm:text-sm font-bold text-white shadow-lg shadow-[#E50914]/25 transition disabled:opacity-60 cursor-pointer"
+                disabled={loading || !isDirty}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer",
+                  isDirty && !loading
+                    ? "bg-[#E50914] hover:bg-[#b80710] text-white shadow-lg shadow-[#E50914]/25 active:scale-95"
+                    : "bg-white/[0.06] text-neutral-500 border border-white/[0.06] cursor-not-allowed opacity-60",
+                )}
               >
                 {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                <span>Save All Servers ({streams.length})</span>
+                <span>{isDirty ? "Save to Firebase" : "No Changes to Save"}</span>
               </button>
 
               {existingData && (
