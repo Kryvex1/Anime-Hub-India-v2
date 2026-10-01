@@ -103,10 +103,8 @@ export function getSafeStreamUrl(url: string): string {
     return trimmed;
   }
 
-  // If client is on HTTPS and the stream is plain HTTP
-  const isHttpsEnv = typeof window !== "undefined" ? window.location.protocol === "https:" : true;
-
-  if (trimmed.startsWith("http://") && isHttpsEnv) {
+  // If plain HTTP, route through our streaming proxy to bypass mixed content
+  if (trimmed.startsWith("http://")) {
     return `/api/stream-proxy?url=${encodeURIComponent(trimmed)}`;
   }
 

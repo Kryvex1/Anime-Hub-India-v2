@@ -13,10 +13,29 @@ interface CustomRequest extends IncomingMessage {
  * - Preserves video Content-Type, Content-Range, Content-Length, and Accept-Ranges
  */
 export default function handler(req: CustomRequest, res: ServerResponse) {
+  // Immediately handle CORS preflight
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Range, Content-Type, Origin, Accept, User-Agent, X-Requested-With",
+    );
+    res.setHeader(
+      "Access-Control-Expose-Headers",
+      "Accept-Ranges, Content-Length, Content-Range, Content-Type",
+    );
+    res.setHeader("Access-Control-Max-Age", "86400");
+    res.setHeader("Content-Length", "0");
+    res.end();
+    return;
+  }
+
   try {
     const rawUrl = req.url || "";
     const parsedReq = new URL(rawUrl, `http://${req.headers.host || "localhost:3000"}`);
-    const targetUrl =
+    let targetUrl =
       parsedReq.searchParams.get("url") ||
       (typeof req.query?.url === "string" ? req.query.url : "");
 
@@ -25,6 +44,14 @@ export default function handler(req: CustomRequest, res: ServerResponse) {
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ error: "Missing 'url' parameter" }));
       return;
+    }
+
+    if (targetUrl.startsWith("http%3A") || targetUrl.startsWith("https%3A")) {
+      try {
+        targetUrl = decodeURIComponent(targetUrl);
+      } catch {
+        // ignore
+      }
     }
 
     let parsedTarget: URL;
@@ -42,6 +69,7 @@ export default function handler(req: CustomRequest, res: ServerResponse) {
 
     const headers: Record<string, string> = {
       "User-Agent":
+        (req.headers["user-agent"] as string) ||
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       Accept: "*/*",
     };
@@ -54,9 +82,9 @@ export default function handler(req: CustomRequest, res: ServerResponse) {
       {
         protocol: parsedTarget.protocol,
         hostname: parsedTarget.hostname,
-        port: parsedTarget.port || (isTargetHttps ? 443 : 80),
+        port: parsedTarget.port ? Number(parsedTarget.port) : isTargetHttps ? 443 : 80,
         path: parsedTarget.pathname + parsedTarget.search,
-        method: req.method || "GET",
+        method: req.method === "HEAD" ? "HEAD" : "GET",
         headers,
       },
       (upstreamRes) => {
@@ -68,7 +96,6 @@ export default function handler(req: CustomRequest, res: ServerResponse) {
           "content-length",
           "content-range",
           "accept-ranges",
-          "content-disposition",
           "cache-control",
         ];
 
@@ -80,14 +107,25 @@ export default function handler(req: CustomRequest, res: ServerResponse) {
 
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-        res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Origin, Accept");
+        res.setHeader(
+          "Access-Control-Allow-Headers",
+          "Range, Content-Type, Origin, Accept, User-Agent, X-Requested-With",
+        );
+        res.setHeader(
+          "Access-Control-Expose-Headers",
+          "Accept-Ranges, Content-Length, Content-Range, Content-Type",
+        );
+
+        if (req.method === "HEAD") {
+          res.end();
+          return;
+        }
 
         upstreamRes.pipe(res);
       },
     );
 
     upstreamReq.on("error", (err) => {
-      console.error("Stream proxy upstream connection error:", err);
       if (!res.headersSent) {
         res.statusCode = 502;
         res.setHeader("Content-Type", "application/json");
@@ -96,7 +134,11 @@ export default function handler(req: CustomRequest, res: ServerResponse) {
     });
 
     req.on("close", () => {
-      upstreamReq.destroy();
+      try {
+        upstreamReq.destroy();
+      } catch {
+        // ignore
+      }
     });
 
     upstreamReq.end();

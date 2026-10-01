@@ -38,8 +38,28 @@ function describeStatus(error: Error): string {
 }
 
 function safeStringify(value: unknown): string {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === "object" && "nodeType" in value) {
+    const el = value as HTMLElement;
+    return `[HTMLElement <${el.tagName ? el.tagName.toLowerCase() : "element"}>]`;
+  }
+  const seen = new WeakSet();
   try {
-    return JSON.stringify(value) ?? String(value);
+    return (
+      JSON.stringify(value, (key, val) => {
+        if (typeof val === "object" && val !== null) {
+          if (seen.has(val)) {
+            return "[Circular]";
+          }
+          if ("nodeType" in val) {
+            const el = val as HTMLElement;
+            return `[HTMLElement <${el.tagName ? el.tagName.toLowerCase() : "element"}>]`;
+          }
+          seen.add(val);
+        }
+        return val;
+      }) ?? String(value)
+    );
   } catch {
     return String(value);
   }
@@ -63,7 +83,27 @@ console.error = (...args: unknown[]) => {
 };
 
 if (typeof globalThis.addEventListener === "function") {
-  globalThis.addEventListener("error", (event) => record((event as ErrorEvent).error ?? event));
+  globalThis.addEventListener("error", (event) => {
+    // If it is a DOM element resource error (video, img, script, etc.), extract clean info to avoid circular DOM tree serialization
+    if (
+      event.target &&
+      event.target !== globalThis &&
+      typeof event.target === "object" &&
+      "nodeType" in event.target
+    ) {
+      const el = event.target as HTMLElement;
+      record(
+        new Error(`Resource load error on <${el.tagName ? el.tagName.toLowerCase() : "element"}>`),
+      );
+      return;
+    }
+    const err = (event as ErrorEvent).error;
+    if (err) {
+      record(err);
+    } else {
+      record(new Error((event as ErrorEvent).message || "Global error"));
+    }
+  });
   globalThis.addEventListener("unhandledrejection", (event) =>
     record((event as PromiseRejectionEvent).reason),
   );

@@ -51,15 +51,18 @@ export function NativeVideoPlayer({ src, poster, onEnded, onError, onPlay }: Nat
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
-          onErrorRef.current?.(data);
+          const errMsg = `HLS Stream Error: ${data.type || ""} ${data.details || ""}`.trim();
+          onErrorRef.current?.(errMsg);
         }
       });
       hlsRef.current = hls;
     } else if (isHlsUrl && video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = src;
+      video.load();
     } else {
       // Standard browser playback for MP4, MKV, WebM
       video.src = src;
+      video.load();
     }
 
     return () => {
@@ -129,9 +132,13 @@ export function NativeVideoPlayer({ src, poster, onEnded, onError, onPlay }: Nat
         poster={poster}
         onPlay={() => onPlayRef.current?.()}
         onEnded={() => onEndedRef.current?.()}
-        onError={(e) => {
-          if (videoRef.current?.error?.code !== 1) {
-            onErrorRef.current?.(e);
+        onError={() => {
+          const mediaErr = videoRef.current?.error;
+          // Code 1 is MEDIA_ERR_ABORTED (user paused or source switched), ignore it
+          if (mediaErr && mediaErr.code !== 1) {
+            const errorMsg =
+              mediaErr.message || `Video playback error (MediaError code: ${mediaErr.code})`;
+            onErrorRef.current?.(errorMsg);
           }
         }}
         onContextMenu={(e) => {

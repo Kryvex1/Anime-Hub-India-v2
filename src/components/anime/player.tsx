@@ -30,6 +30,7 @@ import { Row } from "./row";
 import { CastCrewSection, PersonWorksModal, type SelectedPerson } from "./cast-crew";
 import {
   DEFAULT_PLAY_SERVERS,
+  ALL_PLAY_SERVERS,
   resolveStreamUrl,
   getNextServer,
   getNextVidukiApi,
@@ -404,7 +405,6 @@ export function AnimePlayer({
     return DEFAULT_PLAY_SERVERS[0];
   });
   const [allServersFailed, setAllServersFailed] = useState<boolean>(false);
-  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
 
   // Sync selected server when activeServers updates or new media loads
   useEffect(() => {
@@ -417,7 +417,6 @@ export function AnimePlayer({
       }
     }
     setAllServersFailed(false);
-    setFallbackNotice(null);
   }, [animeId, activeServers, customStream]);
 
   // Stream URL calculation supporting Custom Embeds, Viduki, Vidy.st, VidLink
@@ -441,15 +440,15 @@ export function AnimePlayer({
   // Automatic server rotation when a server fails
   const switchToNextServer = useCallback(
     (reason?: string) => {
+      // Never switch away from a custom configured stream
+      if (selectedServer.provider === "custom") {
+        setAllServersFailed(true);
+        return;
+      }
       const next = getNextServer(selectedServer.id, activeServers);
-      if (next) {
+      if (next && next.id !== selectedServer.id) {
         setSelectedServer(next);
         setIframeKey((k) => k + 1);
-        setFallbackNotice(
-          reason ||
-            `${selectedServer.name} stream slow/offline. Automatically switched to ${next.name}.`,
-        );
-        setTimeout(() => setFallbackNotice(null), 6000);
       } else {
         setAllServersFailed(true);
       }
@@ -457,29 +456,28 @@ export function AnimePlayer({
     [selectedServer, activeServers],
   );
 
-  // Automatic timeout fallback: Only for IFRAME embeds (never abort direct MP4/MKV video streams!)
+  // Automatic timeout fallback: Only for IFRAME embeds when multiple servers exist (never for custom streams or direct video)
   useEffect(() => {
-    if (isDirectStream) {
+    if (isDirectStream || selectedServer.provider === "custom" || activeServers.length <= 1) {
       setLoaderVisible(false);
       return;
     }
 
     const timer = setTimeout(() => {
       if (loaderVisible && !allServersFailed) {
-        switchToNextServer(
-          `Server "${selectedServer.name}" response slow. Automatically switched to next server...`,
-        );
+        switchToNextServer();
       }
-    }, 8000);
+    }, 10000);
 
     return () => clearTimeout(timer);
   }, [
     selectedServer.id,
-    selectedServer.name,
+    selectedServer.provider,
     loaderVisible,
     allServersFailed,
     switchToNextServer,
     isDirectStream,
+    activeServers.length,
   ]);
 
   const [hasStartedWatching, setHasStartedWatching] = useState(false);
@@ -722,20 +720,10 @@ export function AnimePlayer({
     }
   }, [nextEpisode, currentSeasonNum, handleSwitchEpisode]);
 
-  const handleNativeError = useCallback(
-    (err: unknown) => {
-      console.warn("Direct video error in player:", err);
-      // Only switch server if there are multiple active servers
-      if (activeServers.length > 1) {
-        switchToNextServer(
-          `Server ${selectedServer.name} direct video unreachable. Switched to next server.`,
-        );
-      } else {
-        setAllServersFailed(true);
-      }
-    },
-    [activeServers.length, selectedServer.name, switchToNextServer],
-  );
+  const handleNativeError = useCallback((err: unknown) => {
+    console.warn("Direct video error in player:", err);
+    setAllServersFailed(true);
+  }, []);
 
   const isSavedInWatchlist = ready && anime ? has(anime.id) : false;
 
@@ -848,45 +836,31 @@ export function AnimePlayer({
               </div>
             )}
 
-            {/* All Servers Failed Banner */}
+            {/* Error / Offline Playback Banner */}
             {allServersFailed ? (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/95 p-6 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E50914]/20 border border-[#E50914]/40 text-[#E50914] mb-3">
                   <AlertTriangle className="h-6 w-6" />
                 </div>
                 <h3 className="text-base sm:text-lg font-bold text-white">
-                  All available servers are unavailable
+                  Video Currently Unavailable
                 </h3>
                 <p className="mt-1 max-w-md text-xs sm:text-sm text-neutral-400">
-                  The current title is not responding on this server. You can retry with Multi
-                  Server or select another server.
+                  The stream could not be loaded. Please click below to reload or check your
+                  connection.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedServer(ALL_PLAY_SERVERS[0]);
                       setAllServersFailed(false);
                       setIframeKey((k) => k + 1);
                     }}
-                    className="flex items-center gap-1.5 rounded-lg bg-[#E50914] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#b80710] cursor-pointer active:scale-95"
+                    className="flex items-center gap-1.5 rounded-lg bg-[#E50914] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#b80710] cursor-pointer active:scale-95 shadow-lg shadow-[#E50914]/20"
                   >
                     <RotateCw className="h-3.5 w-3.5" />
-                    Retry Multi Server
+                    Reload Video
                   </button>
-                  {ALL_PLAY_SERVERS[1] && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedServer(ALL_PLAY_SERVERS[1]);
-                        setAllServersFailed(false);
-                        setIframeKey((k) => k + 1);
-                      }}
-                      className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/20 border border-white/10 cursor-pointer active:scale-95"
-                    >
-                      Try {ALL_PLAY_SERVERS[1].name}
-                    </button>
-                  )}
                 </div>
               </div>
             ) : isDirectStream ? (
@@ -907,11 +881,7 @@ export function AnimePlayer({
                   id="videoFrame"
                   src={currentStreamUrl}
                   onLoad={handleIframeLoad}
-                  onError={() =>
-                    switchToNextServer(
-                      `Server ${selectedServer.name} connection error. Automatically switched to next server.`,
-                    )
-                  }
+                  onError={() => setAllServersFailed(true)}
                   referrerPolicy="no-referrer"
                   scrolling="no"
                   allow="encrypted-media; autoplay *; fullscreen *"
@@ -923,105 +893,87 @@ export function AnimePlayer({
           </div>
         </div>
 
-        {/* Fallback Notice Banner */}
-        {fallbackNotice && (
-          <div className="flex items-center gap-2.5 px-3.5 py-2 bg-[#E50914]/15 border border-[#E50914]/30 rounded-xl text-neutral-200 text-xs">
-            <AlertCircle className="w-4 h-4 text-[#E50914] shrink-0" />
-            <span className="font-medium">{fallbackNotice}</span>
-          </div>
-        )}
-
-        {/* 3. SERVER SELECTOR & CONTROLS BAR */}
+        {/* 3. SERVER SELECTOR & PLAYER CONTROLS BAR */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-[#0D1017] border border-white/[0.08] rounded-xl">
           {/* Server Selector Tabs */}
-          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <div className="flex items-center gap-1 flex-wrap min-w-0">
             {isCustomPending || isConfigPending ? (
               <div className="flex items-center gap-1.5">
                 <div className="h-6 w-16 rounded-lg bg-white/[0.06] shimmer" />
                 <div className="h-6 w-20 rounded-lg bg-white/[0.06] shimmer" />
-                <div className="h-6 w-16 rounded-lg bg-white/[0.06] shimmer" />
               </div>
             ) : (
-              <div className="flex items-center gap-1 flex-wrap">
-                {activeServers.map((server) => {
-                  const isSelected = selectedServer.id === server.id;
-                  const isHindi = server.id === "viduki-2";
-                  const isCustom =
-                    server.provider === "custom" || server.id.startsWith("custom-stream");
+              activeServers.map((server) => {
+                const isSelected = selectedServer.id === server.id;
+                const isCustom =
+                  server.provider === "custom" || server.id.startsWith("custom-stream");
 
-                  return (
-                    <button
-                      key={server.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedServer(server);
-                        setAllServersFailed(false);
-                        setIframeKey((k) => k + 1);
-                      }}
+                return (
+                  <button
+                    key={server.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedServer(server);
+                      setAllServersFailed(false);
+                      setIframeKey((k) => k + 1);
+                    }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95",
+                      isSelected
+                        ? isCustom
+                          ? "bg-amber-500 text-black font-bold border border-amber-400"
+                          : "bg-[#E50914] text-white font-bold border border-[#ff3b47]"
+                        : isCustom
+                          ? "bg-amber-500/10 text-amber-300 hover:text-amber-100 hover:bg-amber-500/20 border border-amber-500/30"
+                          : "bg-white/[0.04] text-neutral-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.08]",
+                    )}
+                  >
+                    <span
                       className={cn(
-                        "px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 active:scale-95",
+                        "w-1.5 h-1.5 rounded-full shrink-0",
                         isSelected
                           ? isCustom
-                            ? "bg-amber-500 text-black font-bold border border-amber-400"
-                            : "bg-[#E50914] text-white font-bold border border-[#ff3b47]"
-                          : isHindi
-                            ? "bg-white/[0.04] text-neutral-200 hover:text-white hover:bg-white/[0.08] border border-orange-500/30"
-                            : isCustom
-                              ? "bg-amber-500/10 text-amber-300 hover:text-amber-100 hover:bg-amber-500/20 border border-amber-500/30"
-                              : "bg-white/[0.04] text-neutral-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.08]",
+                            ? "bg-black"
+                            : "bg-white"
+                          : isCustom
+                            ? "bg-amber-400"
+                            : "bg-emerald-400",
                       )}
-                    >
+                    />
+                    <span className="truncate max-w-[120px]">{server.name}</span>
+                    {server.badge && (
                       <span
                         className={cn(
-                          "w-1.5 h-1.5 rounded-full shrink-0",
+                          "text-[9px] px-1 py-0.2 rounded font-bold tracking-tight",
                           isSelected
                             ? isCustom
-                              ? "bg-black"
-                              : "bg-white"
-                            : isHindi
-                              ? "bg-orange-400"
-                              : isCustom
-                                ? "bg-amber-400"
-                                : "bg-emerald-400",
+                              ? "bg-black/20 text-black"
+                              : "bg-black/30 text-white/90"
+                            : isCustom
+                              ? "bg-amber-500/20 text-amber-200"
+                              : "bg-white/[0.08] text-neutral-400",
                         )}
-                      />
-                      <span className="truncate max-w-[120px]">{server.name}</span>
-                      {server.badge && (
-                        <span
-                          className={cn(
-                            "text-[9px] px-1 py-0.2 rounded font-bold tracking-tight",
-                            isSelected
-                              ? isCustom
-                                ? "bg-black/20 text-black"
-                                : "bg-black/30 text-white/90"
-                              : isHindi
-                                ? "bg-orange-500/20 text-orange-300"
-                                : isCustom
-                                  ? "bg-amber-500/20 text-amber-200"
-                                  : "bg-white/[0.08] text-neutral-400",
-                          )}
-                        >
-                          {server.badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                      >
+                        {server.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
+          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(true)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-[11px] font-bold transition active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#E50914]/20 hover:bg-[#E50914]/35 text-[#ff4d56] border border-[#E50914]/40 text-[11px] font-bold transition active:scale-95 cursor-pointer"
                 title="Admin: Edit or Add Custom Stream Embed"
               >
                 <Edit className="w-3 h-3" />
-                <span>{customStream ? "Edit Streams" : "Add Stream"}</span>
+                <span>{customStream ? "Edit Stream" : "Add Stream"}</span>
               </button>
             )}
 
@@ -1033,26 +985,6 @@ export function AnimePlayer({
             >
               <Share2 width={13} height={13} />
               <span>{copied ? "Copied" : "Share"}</span>
-            </button>
-
-            <a
-              href={currentStreamUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 sm:p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/[0.08] transition cursor-pointer active:scale-90 border border-white/[0.06]"
-              title="Open Stream in New Tab"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </a>
-
-            <button
-              type="button"
-              onClick={() => switchToNextServer("Switched to next server.")}
-              className="px-2.5 py-1.5 rounded-lg text-neutral-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] transition cursor-pointer active:scale-95 border border-white/[0.08] text-xs font-semibold flex items-center gap-1.5"
-              title="Auto switch to next server"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Next Server</span>
             </button>
 
             <button
@@ -1074,40 +1006,6 @@ export function AnimePlayer({
             </button>
           </div>
         </div>
-
-        {/* Collapsible Server Tip Box */}
-        {showServerTip ? (
-          <div className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-gradient-to-r from-sky-500/10 via-[#181818] to-transparent border border-sky-500/25 rounded-xl text-neutral-300 text-xs">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-sky-400">
-                <HelpCircle className="w-3.5 h-3.5" />
-              </span>
-              <span className="text-[11px] sm:text-xs text-neutral-300">
-                <strong className="text-white font-semibold">
-                  Video not playing or buffering?
-                </strong>{" "}
-                Try switching to another server (Multi Server, Server 2, Server 3) above.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleDismissTip}
-              className="shrink-0 text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
-              title="Dismiss notice"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={handleOpenTip}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-400 hover:text-white transition cursor-pointer px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] self-start"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
-            <span>Server Playback Help</span>
-          </button>
-        )}
 
         {/* 4. PREV / NEXT BAR (ONLY FOR TV SERIES) */}
         {!isMovie && (
