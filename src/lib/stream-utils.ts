@@ -1,9 +1,15 @@
 /**
- * Helper to clean and normalize video streaming URLs (e.g. if user pastes iframe code, youtube watch link, etc.)
+ * Helper to clean and normalize video streaming URLs (e.g. if user pastes iframe code, video tag, youtube watch link, direct MP4/MKV etc.)
  */
 export function cleanStreamUrl(input: string): string {
   if (!input) return "";
   let url = input.trim();
+
+  // If user pasted a video tag or source tag (e.g. <video src="..."></video> or <source src="..." />)
+  const videoTagMatch = url.match(/<(?:video|source)[^>]+src=["']([^"']+)["']/i);
+  if (videoTagMatch && videoTagMatch[1]) {
+    url = videoTagMatch[1].trim();
+  }
 
   // If user pasted an iframe embed code (e.g. <iframe src="https://..."></iframe>)
   const iframeMatch = url.match(/src=["']([^"']+)["']/i);
@@ -38,17 +44,71 @@ export function cleanStreamUrl(input: string): string {
 }
 
 /**
- * Detects if a URL is a direct media source (m3u8 HLS or mp4/webm file)
+ * Detects if a URL is a direct media source (m3u8 HLS, mp4, mkv, webm, mov, ogg, or direct stream)
  */
 export function isDirectMediaUrl(url: string): boolean {
   if (!url) return false;
-  const clean = url.toLowerCase().split("?")[0];
+  const raw = url.trim().toLowerCase();
+
+  // If proxied through our stream proxy
+  if (raw.includes("/api/stream-proxy")) {
+    try {
+      const parsed = new URL(url, "http://localhost:3000");
+      const targetUrl = parsed.searchParams.get("url") || "";
+      if (targetUrl) {
+        return isDirectMediaUrl(targetUrl);
+      }
+    } catch {
+      // ignore
+    }
+    return true;
+  }
+
+  const clean = raw.split("?")[0].split("#")[0];
+
+  // Direct video file extensions (with or without query string, hash, or tokens)
+  const hasDirectExt = /\.(mp4|m3u8|mkv|webm|mov|ogg|ts|m4v)(\?|#|$)/i.test(raw);
+  if (hasDirectExt) return true;
+
   return (
     clean.endsWith(".m3u8") ||
     clean.endsWith(".mp4") ||
-    clean.endsWith(".webm") ||
-    clean.endsWith(".ogg") ||
     clean.endsWith(".mkv") ||
-    clean.includes(".m3u8")
+    clean.endsWith(".webm") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".ogg") ||
+    clean.endsWith(".ts") ||
+    clean.endsWith(".m4v") ||
+    raw.includes(".m3u8") ||
+    raw.includes(".mp4?") ||
+    raw.includes(".mkv?") ||
+    raw.includes(".webm?") ||
+    raw.includes("format=m3u8") ||
+    raw.includes("mime=video") ||
+    raw.includes("type=video") ||
+    raw.includes("video/mp4")
   );
+}
+
+/**
+ * Safely converts insecure HTTP media URLs through our streaming proxy
+ * so HTTPS browsers don't block them as Mixed Content.
+ */
+export function getSafeStreamUrl(url: string): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+
+  // If already proxied, return as is
+  if (trimmed.startsWith("/api/stream-proxy") || trimmed.includes("/api/stream-proxy?url=")) {
+    return trimmed;
+  }
+
+  // If client is on HTTPS and the stream is plain HTTP
+  const isHttpsEnv = typeof window !== "undefined" ? window.location.protocol === "https:" : true;
+
+  if (trimmed.startsWith("http://") && isHttpsEnv) {
+    return `/api/stream-proxy?url=${encodeURIComponent(trimmed)}`;
+  }
+
+  return trimmed;
 }

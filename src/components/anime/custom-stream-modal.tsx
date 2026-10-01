@@ -444,13 +444,13 @@ export function CustomStreamModal({
 
                     <div className="space-y-1">
                       <label className="text-[11px] font-medium text-neutral-300 block">
-                        Embed Iframe Code or Direct URL
+                        Direct Video Link (MP4, MKV, M3U8, WebM) or Embed Iframe URL
                       </label>
                       <textarea
                         rows={2}
                         value={st.customUrl}
                         onChange={(e) => handleStreamChange(idx, "customUrl", e.target.value)}
-                        placeholder='<iframe src="https://..."></iframe> or stream url (leave blank if none)'
+                        placeholder='https://.../video.mp4, .mkv, .m3u8 or <iframe src="https://..."></iframe>'
                         className="w-full rounded-xl bg-black/40 border border-white/[0.08] px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] font-mono resize-none"
                       />
                     </div>

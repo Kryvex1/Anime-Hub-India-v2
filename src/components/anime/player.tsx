@@ -42,6 +42,8 @@ import {
   useTvEpisodeCustomLinks,
   hasValidCustomStream,
 } from "@/lib/firebase";
+import { isDirectMediaUrl, getSafeStreamUrl } from "@/lib/stream-utils";
+import { NativeVideoPlayer } from "./native-player";
 import { CustomStreamModal } from "./custom-stream-modal";
 import { BrandBadge } from "./brand-badge";
 import { getAniListIdByTitle } from "@/lib/anilist";
@@ -420,7 +422,7 @@ export function AnimePlayer({
 
   // Stream URL calculation supporting Custom Embeds, Viduki, Vidy.st, VidLink
   const currentStreamUrl = useMemo(() => {
-    return resolveStreamUrl(
+    const raw = resolveStreamUrl(
       selectedServer,
       isMovie ? "movie" : "tv",
       animeId,
@@ -428,7 +430,13 @@ export function AnimePlayer({
       effectiveEpisodeNum,
       anilistId,
     );
+    return getSafeStreamUrl(raw);
   }, [selectedServer, isMovie, animeId, effectiveSeasonNum, effectiveEpisodeNum, anilistId]);
+
+  // Check if current stream is a direct video link (MP4, MKV, M3U8, WebM)
+  const isDirectStream = useMemo(() => {
+    return isDirectMediaUrl(currentStreamUrl);
+  }, [currentStreamUrl]);
 
   // Automatic server rotation when a server fails
   const switchToNextServer = useCallback(
@@ -449,18 +457,30 @@ export function AnimePlayer({
     [selectedServer, activeServers],
   );
 
-  // Automatic timeout fallback: If stream takes more than 7.5 seconds to load, try next server automatically
+  // Automatic timeout fallback: Only for IFRAME embeds (never abort direct MP4/MKV video streams!)
   useEffect(() => {
+    if (isDirectStream) {
+      setLoaderVisible(false);
+      return;
+    }
+
     const timer = setTimeout(() => {
       if (loaderVisible && !allServersFailed) {
         switchToNextServer(
           `Server "${selectedServer.name}" response slow. Automatically switched to next server...`,
         );
       }
-    }, 7500);
+    }, 8000);
 
     return () => clearTimeout(timer);
-  }, [selectedServer.id, selectedServer.name, loaderVisible, allServersFailed, switchToNextServer]);
+  }, [
+    selectedServer.id,
+    selectedServer.name,
+    loaderVisible,
+    allServersFailed,
+    switchToNextServer,
+    isDirectStream,
+  ]);
 
   const [hasStartedWatching, setHasStartedWatching] = useState(false);
 
@@ -690,6 +710,33 @@ export function AnimePlayer({
       ? visibleEpisodes[currentEpIndex + 1]
       : null;
 
+  // Stable callbacks for Native Video Player to avoid re-rendering re-attachment
+  const handleNativePlay = useCallback(() => {
+    setHasStartedWatching(true);
+    setLoaderVisible(false);
+  }, []);
+
+  const handleNativeEnded = useCallback(() => {
+    if (nextEpisode) {
+      handleSwitchEpisode(currentSeasonNum, nextEpisode.episodeNumber);
+    }
+  }, [nextEpisode, currentSeasonNum, handleSwitchEpisode]);
+
+  const handleNativeError = useCallback(
+    (err: unknown) => {
+      console.warn("Direct video error in player:", err);
+      // Only switch server if there are multiple active servers
+      if (activeServers.length > 1) {
+        switchToNextServer(
+          `Server ${selectedServer.name} direct video unreachable. Switched to next server.`,
+        );
+      } else {
+        setAllServersFailed(true);
+      }
+    },
+    [activeServers.length, selectedServer.name, switchToNextServer],
+  );
+
   const isSavedInWatchlist = ready && anime ? has(anime.id) : false;
 
   const backButtonContent = (
@@ -774,30 +821,32 @@ export function AnimePlayer({
                 : "aspect-video rounded-xl sm:rounded-2xl border border-white/10",
             )}
           >
-            {/* Animated Blur Loader Overlay */}
-            <div
-              onClick={() => setLoaderVisible(false)}
-              className={`absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col justify-center items-center gap-3 z-10 cursor-pointer transition-all duration-300 ${
-                loaderVisible && !allServersFailed
-                  ? "opacity-100 visible"
-                  : "opacity-0 invisible pointer-events-none"
-              }`}
-            >
-              <div className="relative w-11 h-11 flex items-center justify-center bg-[#E50914]/20 border border-[#E50914]/40 rounded-2xl animate-pulse">
-                <IconPlay width={18} height={18} className="text-[#E50914]" />
-              </div>
+            {/* Animated Blur Loader Overlay (Only for iframe embeds) */}
+            {!isDirectStream && (
+              <div
+                onClick={() => setLoaderVisible(false)}
+                className={`absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col justify-center items-center gap-3 z-10 cursor-pointer transition-all duration-300 ${
+                  loaderVisible && !allServersFailed
+                    ? "opacity-100 visible"
+                    : "opacity-0 invisible pointer-events-none"
+                }`}
+              >
+                <div className="relative w-11 h-11 flex items-center justify-center bg-[#E50914]/20 border border-[#E50914]/40 rounded-2xl animate-pulse">
+                  <IconPlay width={18} height={18} className="text-[#E50914]" />
+                </div>
 
-              <div className="h-5 text-center">
-                <span className="text-white text-xs sm:text-sm font-semibold tracking-tight">
-                  {LOADER_STEPS[stepIndex]?.text}
-                </span>
-              </div>
+                <div className="h-5 text-center">
+                  <span className="text-white text-xs sm:text-sm font-semibold tracking-tight">
+                    {LOADER_STEPS[stepIndex]?.text}
+                  </span>
+                </div>
 
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/[0.05] border border-white/10 rounded-full text-neutral-400 text-[11px]">
-                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
-                {selectedServer.name}
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/[0.05] border border-white/10 rounded-full text-neutral-400 text-[11px]">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                  {selectedServer.name}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* All Servers Failed Banner */}
             {allServersFailed ? (
@@ -840,6 +889,16 @@ export function AnimePlayer({
                   )}
                 </div>
               </div>
+            ) : isDirectStream ? (
+              /* Protected Browser Native Video Player */
+              <NativeVideoPlayer
+                key={`${currentStreamUrl}_${iframeKey}`}
+                src={currentStreamUrl}
+                poster={img(anime?.backdrop || anime?.poster, "original")}
+                onPlay={handleNativePlay}
+                onEnded={handleNativeEnded}
+                onError={handleNativeError}
+              />
             ) : (
               /* Direct Iframe Stream */
               <div className="player-container w-full h-full relative">

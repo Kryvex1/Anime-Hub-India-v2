@@ -1149,7 +1149,7 @@ service cloud.firestore {
 
                           <div className="space-y-1">
                             <label className="text-[11px] font-medium text-neutral-300 block">
-                              Embed Iframe Code or Direct URL (Optional)
+                              Direct Video Link (MP4, MKV, M3U8, WebM) or Embed Iframe URL
                             </label>
                             <textarea
                               rows={2}
@@ -1157,7 +1157,7 @@ service cloud.firestore {
                               onChange={(e) =>
                                 handleAdminStreamChange(idx, "customUrl", e.target.value)
                               }
-                              placeholder='Paste <iframe src="..."></iframe> or direct stream link (optional)'
+                              placeholder='Paste direct MP4, MKV, M3U8 video link or <iframe src="..."></iframe>'
                               className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-[#E50914] font-mono resize-none"
                             />
                           </div>

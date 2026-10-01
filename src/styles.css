@@ -448,3 +448,15 @@
   padding: 0 !important;
   border-radius: 0px !important;
 }
+
+/* Hide browser native video download buttons & disable URL extraction on hold */
+video::-internal-media-controls-download-button {
+  display: none !important;
+}
+video::-webkit-media-controls-download-button {
+  display: none !important;
+}
+video {
+  -webkit-touch-callout: none !important;
+  user-select: none !important;
+}
