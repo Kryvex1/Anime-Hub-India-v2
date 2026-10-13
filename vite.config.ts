@@ -257,6 +257,45 @@ function streamProxyPlugin(): Plugin {
   };
 }
 
+function geoPlugin(): Plugin {
+  const handler = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    if (!req.url || !req.url.startsWith("/api/geo")) {
+      return next();
+    }
+    const countryHeader =
+      req.headers["x-vercel-ip-country"] ||
+      req.headers["cf-ipcountry"] ||
+      req.headers["x-country-code"] ||
+      req.headers["x-appengine-country"];
+
+    const countryCode =
+      typeof countryHeader === "string" && countryHeader.length === 2
+        ? countryHeader.toUpperCase()
+        : null;
+
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.end(
+      JSON.stringify({
+        country: countryCode || null,
+        detected: Boolean(countryCode),
+      }),
+    );
+  };
+
+  return {
+    name: "geo-plugin",
+    configureServer(server) {
+      server.middlewares.use(handler);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(handler);
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -271,6 +310,7 @@ export default defineConfig({
     tsconfigPaths(),
     tmdbProxyPlugin(),
     streamProxyPlugin(),
+    geoPlugin(),
   ],
   server: {
     host: "0.0.0.0",

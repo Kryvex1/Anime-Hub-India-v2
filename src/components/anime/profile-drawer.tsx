@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { X, Play, Trash2, Bookmark, Film, ChevronRight } from "lucide-react";
+import { X, Play, Trash2, Bookmark, Film, ChevronRight, Globe, Languages } from "lucide-react";
 import { useWatchHistory, type WatchHistoryItem } from "@/lib/watch-history";
 import { useWatchlist } from "@/lib/watchlist";
+import { useAppSettings, COUNTRY_OPTIONS, LANGUAGE_OPTIONS } from "@/lib/settings";
 import { getMediaCategory } from "@/lib/routes-helper";
 import { img } from "./media";
 
@@ -14,6 +15,7 @@ interface ProfileDrawerProps {
 export function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   const { history, removeItem, clearAll } = useWatchHistory();
   const { ids: watchlistIds } = useWatchlist();
+  const { settings, updateSetting } = useAppSettings();
   const navigate = useNavigate();
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -88,7 +90,7 @@ export function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
         <div className="flex items-center justify-between border-b border-white/[0.08] px-4 sm:px-5 py-3.5 bg-[#0e121a]">
           <div>
             <h2 className="text-base font-bold text-white tracking-tight">My Library</h2>
-            <p className="text-[11px] text-neutral-400">Watchlist & Continue Watching</p>
+            <p className="text-[11px] text-neutral-400">Watchlist, History & Region Preferences</p>
           </div>
 
           <button
@@ -121,6 +123,61 @@ export function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             </div>
             <ChevronRight className="w-4 h-4 text-neutral-500 group-hover:text-white transition" />
           </Link>
+        </div>
+
+        {/* Regional Personalization Section */}
+        <div className="p-3 sm:p-4 border-b border-white/[0.06] bg-[#0d111a] space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-[#E50914]" /> Recommendation Region
+            </span>
+            <span className="text-[11px] font-medium text-emerald-400">
+              {COUNTRY_OPTIONS.find((c) => c.code === settings.country)?.flag || "🇮🇳"}{" "}
+              {COUNTRY_OPTIONS.find((c) => c.code === settings.country)?.name || "India"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="country-select" className="block text-[10px] text-neutral-400 mb-1">
+                Country
+              </label>
+              <select
+                id="country-select"
+                value={settings.country}
+                onChange={(e) => updateSetting("country", e.target.value)}
+                className="w-full text-xs font-semibold bg-white/[0.05] border border-white/10 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-[#E50914] cursor-pointer"
+              >
+                {COUNTRY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code} className="bg-[#11141d] text-white">
+                    {c.flag} {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="language-select" className="block text-[10px] text-neutral-400 mb-1">
+                Primary Language
+              </label>
+              <select
+                id="language-select"
+                value={settings.preferredLanguages[0] || "hi"}
+                onChange={(e) => {
+                  const newPrimary = e.target.value;
+                  const rest = settings.preferredLanguages.filter((l) => l !== newPrimary);
+                  updateSetting("preferredLanguages", [newPrimary, ...rest]);
+                }}
+                className="w-full text-xs font-semibold bg-white/[0.05] border border-white/10 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-[#E50914] cursor-pointer"
+              >
+                {LANGUAGE_OPTIONS.map((l) => (
+                  <option key={l.code} value={l.code} className="bg-[#11141d] text-white">
+                    {l.name} ({l.nativeName})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Continue Watching List */}

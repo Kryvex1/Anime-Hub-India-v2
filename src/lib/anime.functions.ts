@@ -19,6 +19,7 @@ import {
   discoverKidsAndFamily as fetchTmdbKidsAndFamily,
   discoverAnimeHits as fetchTmdbAnimeHits,
   discoverTopRatedMovies as fetchTmdbTopRatedMovies,
+  fetchCountryTrendingHero,
   ANIMATION_GENRE,
   type Show,
 } from "./tmdb";
@@ -56,11 +57,15 @@ export async function fetchCardItemsByIds(ids: number[]): Promise<CardItem[]> {
   return items.filter((i): i is CardItem => i !== null);
 }
 
-// In-memory cache for home feed to deliver instant 0ms loads on revisits
-let cachedHomeFeed: { at: number; data: Awaited<ReturnType<typeof fetchHomeDirect>> } | null = null;
+// In-memory cache for home feed per country to deliver instant 0ms loads on revisits
+const cachedHomeFeedMap = new Map<
+  string,
+  { at: number; data: Awaited<ReturnType<typeof fetchHomeDirect>> }
+>();
 
-async function fetchHomeDirect() {
+async function fetchHomeDirect(userCountry = "IN") {
   const [
+    heroItems,
     hollywoodRes,
     bollywoodRes,
     indianTrendingRes,
@@ -71,6 +76,7 @@ async function fetchHomeDirect() {
     southCinemaRes,
     topRatedMoviesRes,
   ] = await Promise.all([
+    fetchCountryTrendingHero(userCountry).catch(() => [] as CardItem[]),
     fetchTmdbHollywood(1).catch(() => ({ items: [] as CardItem[] })),
     fetchTmdbBollywood(1).catch(() => ({ items: [] as CardItem[] })),
     fetchTmdbIndianTrending(1).catch(() => ({ items: [] as CardItem[] })),
@@ -95,33 +101,30 @@ async function fetchHomeDirect() {
   const kidsFamilyShows = kidsFamilyRes.items || [];
   const popularSeries = (popularSeriesRes.items || []).filter((c) => !c.isMovie);
 
-  // Deduplicate and select Hero banners with backdrops prioritizing high visual Indian & global hits
-  const heroCandidates = [
-    ...hollywoodMovies,
-    ...bollywoodMovies,
-    ...indianTrendingMovies,
-    ...kdramaShows,
-    ...popularSeries,
-  ].filter((c) => Boolean(c.backdrop));
-
-  const seenHeroIds = new Set<number>();
-  const heroItems: CardItem[] = [];
-
-  for (const item of heroCandidates) {
-    if (!seenHeroIds.has(item.id)) {
-      seenHeroIds.add(item.id);
-      heroItems.push(item);
-      if (heroItems.length >= 10) break;
+  // Dynamic Country-Based Hero Banners: Uses real TMDB regional trending & popular data
+  let finalHero = (heroItems || []).filter((c) => Boolean(c.backdrop));
+  if (finalHero.length === 0) {
+    // Graceful fallback if country returned no backdrop candidates
+    const fallbackCandidates = [
+      ...hollywoodMovies,
+      ...bollywoodMovies,
+      ...indianTrendingMovies,
+      ...kdramaShows,
+      ...popularSeries,
+    ].filter((c) => Boolean(c.backdrop));
+    const seen = new Set<number>();
+    finalHero = [];
+    for (const item of fallbackCandidates) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        finalHero.push(item);
+        if (finalHero.length >= 10) break;
+      }
     }
   }
 
-  // Fallback hero if needed
-  if (heroItems.length === 0 && hollywoodMovies.length > 0) {
-    heroItems.push(...hollywoodMovies.slice(0, 5));
-  }
-
   return {
-    hero: heroItems,
+    hero: finalHero,
     hollywood: hollywoodMovies,
     bollywood: bollywoodMovies,
     indianTrending: indianTrendingMovies,
@@ -140,13 +143,15 @@ async function fetchHomeDirect() {
   };
 }
 
-export async function fetchHome() {
+export async function fetchHome(userCountry = "IN") {
+  const code = (userCountry || "IN").toUpperCase().trim();
   const now = Date.now();
-  if (cachedHomeFeed && now - cachedHomeFeed.at < 1000 * 60 * 10) {
-    return cachedHomeFeed.data;
+  const cached = cachedHomeFeedMap.get(code);
+  if (cached && now - cached.at < 1000 * 60 * 10) {
+    return cached.data;
   }
-  const data = await fetchHomeDirect();
-  cachedHomeFeed = { at: now, data };
+  const data = await fetchHomeDirect(code);
+  cachedHomeFeedMap.set(code, { at: now, data });
   return data;
 }
 

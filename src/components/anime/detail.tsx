@@ -7,6 +7,10 @@ import { animateCardStagger } from "@/lib/anime-animation";
 import { fetchSeason, fetchShow } from "@/lib/anime.functions";
 import { getMediaCategory } from "@/lib/routes-helper";
 import { getKnownCard, type ShowDetails } from "@/lib/tmdb";
+import { getSimilarContent, buildUserTasteProfile } from "@/lib/recommendations";
+import { useAppSettings } from "@/lib/settings";
+import { useWatchHistory } from "@/lib/watch-history";
+import { useWatchlist } from "@/lib/watchlist";
 import {
   useAuthUser,
   fetchCustomStream,
@@ -82,6 +86,32 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
       return true;
     return false;
   }, [data]);
+
+  const { settings } = useAppSettings();
+  const { history: watchHistory } = useWatchHistory();
+  const { ids: watchlistIds } = useWatchlist();
+
+  // Enhanced Similar Content with intelligent priority ranking (Franchise, Cast, Crew, Genre, Language, Taste)
+  const { data: enhancedSimilar } = useQuery({
+    queryKey: [
+      "enhanced-similar",
+      id,
+      isMovie,
+      settings.country,
+      settings.preferredLanguages.join(","),
+      watchHistory.length,
+      watchlistIds.length,
+    ],
+    queryFn: () => {
+      const profile = buildUserTasteProfile(watchHistory, watchlistIds, settings);
+      return getSimilarContent(data || { id, title: data?.title, isMovie }, 16, profile);
+    },
+    staleTime: 1000 * 60 * 15,
+    enabled: Boolean(data?.id),
+  });
+
+  const finalRecommendations =
+    enhancedSimilar && enhancedSimilar.length > 0 ? enhancedSimilar : data?.recommendations || [];
 
   // Valid seasons for TV series (excluding bonus/specials)
   const allSeasons = useMemo(() => {
@@ -659,11 +689,11 @@ export function AnimeDetail({ id, autoPlay }: { id: number; autoPlay?: boolean }
       ) : null}
 
       {/* Recommendations */}
-      {data.recommendations && data.recommendations.length > 0 ? (
+      {finalRecommendations && finalRecommendations.length > 0 ? (
         <div className="mx-auto mt-8 max-w-[1600px] space-y-6">
           <Row
             title={isMovie ? "Related Movies" : "More Recommended Shows"}
-            items={data.recommendations}
+            items={finalRecommendations}
           />
         </div>
       ) : null}

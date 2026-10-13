@@ -113,6 +113,7 @@ export type ShowDetails = {
   recommendations: CardItem[];
   trailerUrl: string | null;
   contentRating?: string | null;
+  belongsToCollection?: { id: number; name: string } | null;
 };
 
 export type Params = Record<string, string | number | boolean | undefined>;
@@ -750,6 +751,125 @@ export async function trending(page = 1, timeWindow: "week" | "day" = "week") {
   }
 
   return discover({ sort_by: "popularity.desc" }, page);
+}
+
+const heroCountryCache = new Map<string, { at: number; items: CardItem[] }>();
+
+/**
+ * Real, dynamic, country-based trending for Hero Carousel.
+ * Automatically fetches TMDB popular & trending movies/TV shows filtered by visitor's country.
+ * Prioritizes high-visual items with valid backdrops & posters.
+ * Gracefully falls back to TMDB global trending if regional data is limited or unavailable.
+ */
+export async function fetchCountryTrendingHero(countryCode = "IN"): Promise<CardItem[]> {
+  const code = (countryCode || "IN").toUpperCase().trim();
+  const now = Date.now();
+  const cached = heroCountryCache.get(code);
+  if (cached && now - cached.at < 1000 * 60 * 15 && cached.items.length > 0) {
+    return cached.items;
+  }
+
+  try {
+    const isGlobal = code === "GLOBAL";
+    const queries: Promise<{ results?: Show[] }>[] = [];
+
+    if (!isGlobal) {
+      // 1. Popular movies in region
+      queries.push(
+        tmdb<{ results: Show[] }>("/movie/popular", { region: code, page: 1 }).catch(() => ({
+          results: [],
+        })),
+      );
+      // 2. Popular TV in region
+      queries.push(
+        tmdb<{ results: Show[] }>("/tv/popular", { region: code, page: 1 }).catch(() => ({
+          results: [],
+        })),
+      );
+      // 3. Country origin production discovery
+      queries.push(
+        tmdb<{ results: Show[] }>("/discover/movie", {
+          with_origin_country: code,
+          sort_by: "popularity.desc",
+          page: 1,
+        }).catch(() => ({ results: [] })),
+      );
+      queries.push(
+        tmdb<{ results: Show[] }>("/discover/tv", {
+          with_origin_country: code,
+          sort_by: "popularity.desc",
+          page: 1,
+        }).catch(() => ({ results: [] })),
+      );
+    }
+
+    // 4. Always fetch official TMDB trending as reliable baseline / fallback
+    queries.push(
+      tmdb<{ results: Show[] }>("/trending/all/week", { page: 1 }).catch(() => ({ results: [] })),
+    );
+
+    const responses = await Promise.all(queries);
+
+    const candidates: Show[] = [];
+    for (const res of responses) {
+      if (res && Array.isArray(res.results)) {
+        candidates.push(...res.results);
+      }
+    }
+
+    const seenIds = new Set<number>();
+    const rankedHeroCards: CardItem[] = [];
+
+    for (const show of candidates) {
+      if (
+        show &&
+        typeof show.id === "number" &&
+        !seenIds.has(show.id) &&
+        Boolean(show.backdrop_path) &&
+        Boolean(show.poster_path) &&
+        !isDailySoapOrJunkTV(show)
+      ) {
+        seenIds.add(show.id);
+        const card = toCard(show);
+        if (card.backdrop && card.poster) {
+          rankedHeroCards.push(card);
+          if (rankedHeroCards.length >= 10) break;
+        }
+      }
+    }
+
+    if (rankedHeroCards.length > 0) {
+      heroCountryCache.set(code, { at: now, items: rankedHeroCards });
+      return rankedHeroCards;
+    }
+  } catch (err) {
+    console.warn("fetchCountryTrendingHero fallback:", err);
+  }
+
+  const fallbackRes = await trending(1, "week");
+  const fallbackWithBackdrop = fallbackRes.items.filter((i) => Boolean(i.backdrop));
+  const fallbackItems = fallbackWithBackdrop.slice(0, 10);
+  if (fallbackItems.length > 0) {
+    heroCountryCache.set(code, { at: now, items: fallbackItems });
+  }
+  return fallbackItems;
+}
+
+/**
+ * Fetches all movie parts belonging to a TMDB collection (e.g. Sequels, Prequels, Spin-offs).
+ */
+export async function fetchCollectionParts(collectionId: number): Promise<CardItem[]> {
+  try {
+    const res = await tmdb<{ parts?: Show[] }>(`/collection/${collectionId}`);
+    if (res && Array.isArray(res.parts)) {
+      return res.parts
+        .filter((p) => p && p.id && (p.poster_path || p.backdrop_path))
+        .map((p) => toCard({ ...p, media_type: "movie" }));
+    }
+  } catch {
+    // Collection not found or error
+  }
+  return [];
 }
 
 export const JUNK_TV_GENRES = new Set([
@@ -1523,6 +1643,7 @@ async function fetchMovieDetails(id: number): Promise<ShowDetails> {
         production_countries?: { iso_3166_1: string; name: string }[];
         production_companies?: { id: number; name: string }[];
         genres?: { id: number; name: string }[];
+        belongs_to_collection?: { id: number; name: string } | null;
       }
     >(`/movie/${id}`),
     tmdb<{
@@ -1610,6 +1731,9 @@ async function fetchMovieDetails(id: number): Promise<ShowDetails> {
     recommendations: (recs.results || []).slice(0, 12).map(toCard),
     trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
     contentRating,
+    belongsToCollection: movie.belongs_to_collection
+      ? { id: movie.belongs_to_collection.id, name: movie.belongs_to_collection.name }
+      : null,
   };
 }
 

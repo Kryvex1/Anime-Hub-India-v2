@@ -8,6 +8,9 @@ import { ErrorState } from "@/components/anime/states";
 import { TelegramBanner } from "@/components/anime/telegram-banner";
 import { fetchHome } from "@/lib/anime.functions";
 import { useAppSettings } from "@/lib/settings";
+import { useWatchHistory } from "@/lib/watch-history";
+import { useWatchlist } from "@/lib/watchlist";
+import { buildUserTasteProfile, getRecommendationFeed } from "@/lib/recommendations";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,15 +34,38 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const { settings } = useAppSettings();
+  const { history: watchHistory } = useWatchHistory();
+  const { ids: watchlistIds } = useWatchlist();
+
+  // 1. Dynamic country-based home feed (real TMDB regional trending & popular data)
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: [
       "home",
+      settings.country,
       settings.safeMode,
       settings.adultMode,
       settings.darkGoreMode,
       settings.theme,
     ],
-    queryFn: () => fetchHome(),
+    queryFn: () => fetchHome(settings.country),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // 2. Advanced Personalized Recommendation Feed
+  const { data: recFeed } = useQuery({
+    queryKey: [
+      "recommendations-feed",
+      settings.country,
+      settings.preferredLanguages.join(","),
+      watchHistory.length,
+      watchlistIds.length,
+      watchHistory[0]?.animeId || 0,
+      watchHistory[0]?.updatedAt || 0,
+    ],
+    queryFn: () => {
+      const profile = buildUserTasteProfile(watchHistory, watchlistIds, settings);
+      return getRecommendationFeed(profile);
+    },
     staleTime: 1000 * 60 * 5,
   });
 
@@ -106,6 +132,64 @@ function Index() {
       {data.hero && data.hero.length > 0 && <Hero items={data.hero} />}
 
       <div className="relative z-10 mt-6 sm:mt-8 space-y-6 md:space-y-8 pb-12">
+        {/* 1. Personalized Recommendations */}
+        {recFeed?.recommendedForYou && recFeed.recommendedForYou.length > 0 && (
+          <Row
+            title="Recommended for You"
+            items={recFeed.recommendedForYou}
+            action={
+              <Link to="/browse" className="text-xs font-semibold text-primary hover:underline">
+                Explore
+              </Link>
+            }
+          />
+        )}
+
+        {/* 2. Country-Aware Regional Trending */}
+        {recFeed?.trendingInCountry && recFeed.trendingInCountry.items.length > 0 && (
+          <Row
+            title={recFeed.trendingInCountry.countryLabel}
+            items={recFeed.trendingInCountry.items}
+            action={
+              <Link to="/trending" className="text-xs font-semibold text-primary hover:underline">
+                See all
+              </Link>
+            }
+          />
+        )}
+
+        {/* 3. Because You Watched Section */}
+        {recFeed?.becauseYouWatched && recFeed.becauseYouWatched.items.length > 0 && (
+          <Row
+            title={`Because You Watched "${recFeed.becauseYouWatched.sourceTitle}"`}
+            items={recFeed.becauseYouWatched.items}
+          />
+        )}
+
+        {/* 4. Similar to Watchlist */}
+        {recFeed?.similarToWatchlist && recFeed.similarToWatchlist.items.length > 0 && (
+          <Row
+            title={`Similar to "${recFeed.similarToWatchlist.sourceTitle}" on Watchlist`}
+            items={recFeed.similarToWatchlist.items}
+            action={
+              <Link to="/watchlist" className="text-xs font-semibold text-primary hover:underline">
+                Watchlist
+              </Link>
+            }
+          />
+        )}
+
+        {/* 5. Top in Preferred Language */}
+        {recFeed?.topInLanguage && recFeed.topInLanguage.items.length > 0 && (
+          <Row title={recFeed.topInLanguage.languageLabel} items={recFeed.topInLanguage.items} />
+        )}
+
+        {/* 6. New Releases & Fresh Hits */}
+        {recFeed?.newReleases && recFeed.newReleases.length > 0 && (
+          <Row title="New Releases & Fresh Hits" items={recFeed.newReleases} />
+        )}
+
+        {/* Existing Catalog Rows */}
         {data.hollywood && data.hollywood.length > 0 && (
           <Row
             title="Hollywood Blockbusters"
@@ -152,6 +236,11 @@ function Index() {
 
         {data.southCinema && data.southCinema.length > 0 && (
           <Row title="South Indian Cinema (Dubbed & Original)" items={data.southCinema} />
+        )}
+
+        {/* 7. Hidden Gems */}
+        {recFeed?.hiddenGems && recFeed.hiddenGems.length > 0 && (
+          <Row title="Top-Rated Hidden Gems" items={recFeed.hiddenGems} />
         )}
 
         {data.topRated && data.topRated.length > 0 && (
