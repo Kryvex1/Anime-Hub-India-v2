@@ -409,8 +409,41 @@ export function useIsMovieCustomLinked(
   );
 }
 
-export const useMediaBadge = useIsAnimeMovieCustomLinked;
-export const useIsCustomLinkedMedia = useIsAnimeMovieCustomLinked;
+export function useMediaBadge(
+  item:
+    | {
+        id: number;
+        type?: "Movie" | "Series";
+        isMovie?: boolean;
+        isAnime?: boolean;
+        category?: string;
+        genreIds?: number[];
+        originalLanguage?: string;
+        language?: string;
+      }
+    | null
+    | undefined,
+): boolean {
+  return useIsAnimeMovieCustomLinked(item);
+}
+
+export function useIsCustomLinkedMedia(
+  item:
+    | {
+        id: number;
+        type?: "Movie" | "Series";
+        isMovie?: boolean;
+        isAnime?: boolean;
+        category?: string;
+        genreIds?: number[];
+        originalLanguage?: string;
+        language?: string;
+      }
+    | null
+    | undefined,
+): boolean {
+  return useIsAnimeMovieCustomLinked(item);
+}
 
 /**
  * React hook to check if TV episodes have custom stream links
