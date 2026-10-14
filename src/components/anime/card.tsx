@@ -3,11 +3,18 @@ import { Link } from "@tanstack/react-router";
 import type { CardItem } from "@/lib/tmdb";
 import { cn } from "@/lib/utils";
 import { getMediaCategory } from "@/lib/routes-helper";
-import { useIsAnimeMovieCustomLinked, useMediaBadge } from "@/lib/firebase";
+import * as FirebaseLib from "@/lib/firebase";
 
 import { IconInfo, IconPlay } from "./icons";
 import { Img, img } from "./media";
 import { BrandBadge } from "./brand-badge";
+
+function useMediaBadge(item: Record<string, unknown> | null | undefined): boolean {
+  const fn =
+    (FirebaseLib as Record<string, unknown>).useIsAnimeMovieCustomLinked ||
+    (FirebaseLib as Record<string, unknown>).useMediaBadge;
+  return typeof fn === "function" ? Boolean((fn as (i: unknown) => boolean)(item)) : false;
+}
 
 export function AnimeCard({
   item,
