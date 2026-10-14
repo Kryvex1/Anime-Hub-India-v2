@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import "video.js/dist/video-js.css";
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 
 /* JioHotstar Soul Fonts */
@@ -460,3 +461,53 @@ video {
   -webkit-touch-callout: none !important;
   user-select: none !important;
 }
+
+/* Official JW Player 8 Layout & Controlbar Fixes */
+.jwplayer {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background-color: #000000 !important;
+  background: #000000 !important;
+}
+.jwplayer.jw-state-idle,
+.jwplayer.jw-state-buffering,
+.jwplayer.jw-state-setup {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+.jwplayer.jw-state-idle .jw-media,
+.jwplayer.jw-state-buffering .jw-media,
+.jwplayer.jw-state-setup .jw-media,
+.jwplayer.jw-state-idle .jw-preview,
+.jwplayer.jw-state-buffering .jw-preview,
+.jwplayer.jw-state-setup .jw-preview {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+.jwplayer.jw-flag-aspect-mode {
+  height: 100% !important;
+}
+.jwplayer .jw-aspect {
+  display: none !important;
+  padding-top: 0 !important;
+}
+.jwplayer .jw-wrapper {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+.jwplayer .jw-controlbar {
+  display: flex !important;
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  transform: none !important;
+}
+
+
+

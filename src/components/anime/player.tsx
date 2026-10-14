@@ -864,14 +864,27 @@ export function AnimePlayer({
                 </div>
               </div>
             ) : isDirectStream ? (
-              /* Protected Browser Native Video Player */
+              /* Feature-Rich JW Video Player */
               <NativeVideoPlayer
                 key={`${currentStreamUrl}_${iframeKey}`}
                 src={currentStreamUrl}
-                poster={img(anime?.backdrop || anime?.poster, "original")}
+                title={anime?.title}
+                episodeTitle={
+                  isMovie ? "Full Movie" : currentEpisode?.name || `Episode ${effectiveEpisodeNum}`
+                }
+                poster={
+                  img(currentEpisode?.stillPath || anime?.backdrop || anime?.poster, "original") ||
+                  undefined
+                }
+                serverName={selectedServer.name}
                 onPlay={handleNativePlay}
                 onEnded={handleNativeEnded}
                 onError={handleNativeError}
+                onNextEpisode={
+                  nextEpisode
+                    ? () => handleSwitchEpisode(currentSeasonNum, nextEpisode.episodeNumber)
+                    : undefined
+                }
               />
             ) : (
               /* Direct Iframe Stream */
