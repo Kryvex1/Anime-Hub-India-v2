@@ -332,18 +332,6 @@ export function useCustomStreamIds(): Set<string> {
   return streamIds;
 }
 
-/**
- * React hook to check if a specific movie has a custom stream link
- */
-export function useIsMovieCustomLinked(movieId: number | undefined | null): boolean {
-  const customIds = useCustomStreamIds();
-  if (!movieId) return false;
-  return customIds.has(`movie_${movieId}`);
-}
-
-/**
- * React hook to check if an anime movie specifically has a custom stream link
- */
 export function useIsAnimeMovieCustomLinked(
   item:
     | {
@@ -380,6 +368,49 @@ export function useIsAnimeMovieCustomLinked(
     customIds.has(`anime_${item.id}`)
   );
 }
+
+export function useIsMovieCustomLinked(
+  input:
+    | number
+    | {
+        id: number;
+        type?: "Movie" | "Series";
+        isMovie?: boolean;
+        isAnime?: boolean;
+        category?: string;
+        genreIds?: number[];
+        originalLanguage?: string;
+        language?: string;
+      }
+    | null
+    | undefined,
+): boolean {
+  const customIds = useCustomStreamIds();
+  if (!input) return false;
+  if (typeof input === "number") {
+    return customIds.has(`movie_${input}`);
+  }
+
+  const isAnime =
+    Boolean(input.isAnime) ||
+    input.category === "anime" ||
+    (Boolean(input.genreIds?.includes(16)) &&
+      (input.originalLanguage === "ja" || input.language?.toLowerCase() === "ja"));
+
+  if (input.category === "webseries" && !isAnime) {
+    return false;
+  }
+
+  return (
+    customIds.has(`movie_${input.id}`) ||
+    customIds.has(`tv_${input.id}`) ||
+    customIds.has(`tv_${input.id}_1_1`) ||
+    customIds.has(`anime_${input.id}`)
+  );
+}
+
+export const useMediaBadge = useIsAnimeMovieCustomLinked;
+export const useIsCustomLinkedMedia = useIsAnimeMovieCustomLinked;
 
 /**
  * React hook to check if TV episodes have custom stream links
