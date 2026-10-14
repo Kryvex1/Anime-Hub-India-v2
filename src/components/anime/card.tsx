@@ -18,7 +18,7 @@ export function AnimeCard({
   className?: string | undefined;
 }) {
   const category = getMediaCategory(item.id, item);
-  const isCustomLinked = useIsAnimeMovieCustomLinked({ ...item, category });
+  const isCustomLinked = useMediaBadge({ ...item, category });
 
   const cardContent = (
     <>
