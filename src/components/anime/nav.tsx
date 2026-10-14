@@ -15,13 +15,6 @@ const LINKS = [
   { to: "/popular", label: "Popular", Icon: IconPopular },
 ] as const;
 
-const MOBILE = [
-  { to: "/", label: "Home", Icon: IconHome, exact: true },
-  { to: "/browse", label: "Browse", Icon: IconAnime },
-  { to: "/trending", label: "Trending", Icon: IconTrending },
-  { to: "/search", label: "Search", Icon: IconSearch },
-] as const;
-
 export function Logo({ className, compact = false }: { className?: string; compact?: boolean }) {
   return (
     <span className={cn("flex items-center gap-2 select-none group", className)}>
@@ -188,24 +181,60 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 bg-[#070A12]/90 backdrop-blur-2xl border-t border-white/[0.06] md:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+    <nav className="fixed inset-x-0 bottom-0 z-50 bg-[#070A12]/92 backdrop-blur-2xl border-t border-white/[0.06] md:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
       <ul className="mx-auto flex max-w-lg items-center justify-between px-2 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
-        {MOBILE.map(({ to, label, Icon }) => (
-          <li key={to} className="flex-1">
-            <Link
-              to={to}
-              activeOptions={{ exact: to === "/" }}
-              activeProps={{
-                className: "text-[var(--brand-glow)] font-bold",
-              }}
-              inactiveProps={{ className: "text-[#64748b]" }}
-              className="flex flex-col items-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition-all duration-200 active:scale-90"
-            >
-              <Icon width={19} height={19} />
-              <span>{label}</span>
-            </Link>
-          </li>
-        ))}
+        {/* 1. Home */}
+        <li className="flex-1">
+          <Link
+            to="/"
+            activeOptions={{ exact: true }}
+            activeProps={{ className: "text-[var(--brand-glow)] font-bold" }}
+            inactiveProps={{ className: "text-[#64748b]" }}
+            className="flex flex-col items-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition-all duration-200 active:scale-90"
+          >
+            <IconHome width={19} height={19} />
+            <span>Home</span>
+          </Link>
+        </li>
+
+        {/* 2. Browse */}
+        <li className="flex-1">
+          <Link
+            to="/browse"
+            activeProps={{ className: "text-[var(--brand-glow)] font-bold" }}
+            inactiveProps={{ className: "text-[#64748b]" }}
+            className="flex flex-col items-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition-all duration-200 active:scale-90"
+          >
+            <IconAnime width={19} height={19} />
+            <span>Browse</span>
+          </Link>
+        </li>
+
+        {/* 3. Trending */}
+        <li className="flex-1">
+          <Link
+            to="/trending"
+            activeProps={{ className: "text-[var(--brand-glow)] font-bold" }}
+            inactiveProps={{ className: "text-[#64748b]" }}
+            className="flex flex-col items-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition-all duration-200 active:scale-90"
+          >
+            <IconTrending width={19} height={19} />
+            <span>Trending</span>
+          </Link>
+        </li>
+
+        {/* 5. Search */}
+        <li className="flex-1">
+          <Link
+            to="/search"
+            activeProps={{ className: "text-[var(--brand-glow)] font-bold" }}
+            inactiveProps={{ className: "text-[#64748b]" }}
+            className="flex flex-col items-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition-all duration-200 active:scale-90"
+          >
+            <IconSearch width={19} height={19} />
+            <span>Search</span>
+          </Link>
+        </li>
       </ul>
     </nav>
   );

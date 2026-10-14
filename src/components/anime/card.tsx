@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { CardItem } from "@/lib/tmdb";
 import { cn } from "@/lib/utils";
 import { getMediaCategory } from "@/lib/routes-helper";
-import { useIsMovieCustomLinked } from "@/lib/firebase";
+import { useMediaBadge } from "@/lib/firebase";
 
 import { IconInfo, IconPlay } from "./icons";
 import { Img, img } from "./media";
@@ -18,8 +18,7 @@ export function AnimeCard({
   className?: string | undefined;
 }) {
   const category = getMediaCategory(item.id, item);
-  const isMovie = category === "movie";
-  const isCustomLinked = useIsMovieCustomLinked(isMovie ? item.id : null);
+  const badgeType = useMediaBadge(item.id, category);
 
   const cardContent = (
     <>
@@ -32,8 +31,8 @@ export function AnimeCard({
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-90" />
 
-        {/* 7Shows Golden Brand Crest Badge on Movie Poster */}
-        {isMovie && isCustomLinked && <BrandBadge className="absolute top-1.5 left-1.5 z-10" />}
+        {/* Dynamic Brand Badge: "7Shows" (Custom Streams) vs "Anime Hub" (External Redirect) */}
+        {badgeType && <BrandBadge variant={badgeType} className="absolute top-1.5 left-1.5 z-10" />}
 
         {/* Hover action overlay */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 p-2 sm:p-2.5 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">

@@ -330,3 +330,64 @@ export const IconFrown = (p: P) => (
   </Base>
 );
 export const IconSad = IconFrown;
+
+export const IconAnimeCharacter = ({ className, ...props }: SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 36 36"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    width={26}
+    height={26}
+    aria-hidden="true"
+    {...props}
+  >
+    <path
+      d="M18 3L13 9L7 6L9 14L3 17L8 21L5 27L12 25L18 33L24 25L31 27L28 21L33 17L27 14L29 6L23 9L18 3Z"
+      fill="url(#anime_hair_grad)"
+    />
+    <path
+      d="M11 16C11 13 14 11 18 11C22 11 25 13 25 16V22C25 25.5 21.5 28 18 28C14.5 28 11 25.5 11 22V16Z"
+      fill="#FFE0B2"
+    />
+    <path d="M10 13H26V17H10V13Z" fill="#E50914" />
+    <rect x="15" y="13.5" width="6" height="3" rx="1" fill="#FFFFFF" opacity="0.95" />
+    <circle cx="18" cy="15" r="0.8" fill="#E50914" />
+    <path
+      d="M10 13L13 18L15 14L18 19L21 14L23 18L26 13L24 10H12L10 13Z"
+      fill="url(#anime_hair_grad)"
+    />
+    <path
+      d="M13.5 20.5C13.5 19.5 14.5 19 15.5 19.5C16 19.8 16 21 15.2 21.2C14.2 21.5 13.5 21 13.5 20.5Z"
+      fill="#141414"
+    />
+    <circle cx="15.2" cy="19.8" r="0.5" fill="#FFFFFF" />
+    <path
+      d="M22.5 20.5C22.5 19.5 21.5 19 20.5 19.5C20 19.8 20 21 20.8 21.2C21.8 21.5 22.5 21 22.5 20.5Z"
+      fill="#141414"
+    />
+    <circle cx="20.8" cy="19.8" r="0.5" fill="#FFFFFF" />
+    <circle cx="12.5" cy="23" r="1" fill="#FF8A80" opacity="0.7" />
+    <circle cx="23.5" cy="23" r="1" fill="#FF8A80" opacity="0.7" />
+    <path
+      d="M16.5 24.5C17 25.2 19 25.2 19.5 24.5"
+      stroke="#BF360C"
+      strokeWidth="0.9"
+      strokeLinecap="round"
+    />
+    <defs>
+      <linearGradient
+        id="anime_hair_grad"
+        x1="18"
+        y1="3"
+        x2="18"
+        y2="33"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop stopColor="#FF3D00" />
+        <stop offset="0.5" stopColor="#E50914" />
+        <stop offset="1" stopColor="#B71C1C" />
+      </linearGradient>
+    </defs>
+  </svg>
+);

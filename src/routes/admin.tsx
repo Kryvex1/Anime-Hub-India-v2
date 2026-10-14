@@ -128,9 +128,9 @@ function AdminPage() {
     }
   }, [isAdmin]);
 
-  const loadStreams = () => {
+  const loadStreams = (forceRefresh = false) => {
     setStreamsLoading(true);
-    fetchAllCustomStreams().then((list) => {
+    fetchAllCustomStreams(forceRefresh).then((list) => {
       setCustomStreams(list);
       setStreamsLoading(false);
     });
@@ -442,7 +442,12 @@ function AdminPage() {
   };
 
   const handleRemoveAdminStream = (index: number) => {
-    setAdminStreams((prev) => prev.filter((_, i) => i !== index));
+    setAdminStreams((prev) => {
+      if (prev.length <= 1) {
+        return [{ id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" }];
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleAdminStreamChange = (
@@ -544,6 +549,9 @@ function AdminPage() {
         setSavingStream(true);
         try {
           await deleteCustomStream(docId);
+          if (!selectedMedia.isMovie) {
+            await deleteCustomStream(`tv_${selectedMedia.id}`).catch(() => {});
+          }
           setInitialMediaData(null);
           setStreamSaveMessage({ type: "success", text: "Custom settings cleared." });
           loadStreams();
@@ -602,15 +610,19 @@ function AdminPage() {
   };
 
   const handleDeleteStream = async (id: string) => {
-    if (!confirm("Are you sure you want to remove all custom settings for this title?")) return;
+    if (!confirm("Are you sure you want to delete this custom link configuration?")) return;
+
+    // Optimistic UI removal from list
+    setCustomStreams((prev) => prev.filter((item) => item.id !== id));
+
     try {
       await deleteCustomStream(id);
-      loadStreams();
+      loadStreams(true);
       if (selectedMedia) {
         const docId = selectedMedia.isMovie
           ? `movie_${selectedMedia.id}`
           : `tv_${selectedMedia.id}_${selectedSeason}_${selectedEpisode}`;
-        if (id === docId) {
+        if (id === docId || id.startsWith(`tv_${selectedMedia.id}`)) {
           setInitialMediaData(null);
           setAdminStreams([
             { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
@@ -619,10 +631,55 @@ function AdminPage() {
           setPerMediaServerBadges({});
           setPerMediaHiddenServers([]);
           setPerMediaHideAllDefaults(false);
+          setStreamSaveMessage({ type: "success", text: "Custom stream deleted successfully." });
+          setTimeout(() => setStreamSaveMessage(null), 3000);
         }
       }
     } catch {
-      alert("Failed to delete stream link.");
+      alert("Failed to delete stream link. Please try again.");
+      loadStreams(true);
+    }
+  };
+
+  const handleDeleteCurrentSelectedStream = async () => {
+    if (!selectedMedia) return;
+    const docId = selectedMedia.isMovie
+      ? `movie_${selectedMedia.id}`
+      : `tv_${selectedMedia.id}_${selectedSeason}_${selectedEpisode}`;
+
+    if (
+      !confirm(
+        `Are you sure you want to delete all custom links and settings for "${selectedMedia.title}"?`,
+      )
+    ) {
+      return;
+    }
+
+    setSavingStream(true);
+    setCustomStreams((prev) =>
+      prev.filter((item) => item.id !== docId && !item.id.startsWith(`tv_${selectedMedia.id}`)),
+    );
+
+    try {
+      await deleteCustomStream(docId);
+      setInitialMediaData(null);
+      setAdminStreams([
+        { id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" },
+      ]);
+      setPerMediaServerNames({});
+      setPerMediaServerBadges({});
+      setPerMediaHiddenServers([]);
+      setPerMediaHideAllDefaults(false);
+      setStreamSaveMessage({
+        type: "success",
+        text: "Custom links deleted successfully from Firebase!",
+      });
+      loadStreams(true);
+      setTimeout(() => setStreamSaveMessage(null), 3000);
+    } catch {
+      setStreamSaveMessage({ type: "error", text: "Failed to delete link from Firebase." });
+    } finally {
+      setSavingStream(false);
     }
   };
 
@@ -1135,16 +1192,14 @@ service cloud.firestore {
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                               Custom Server #{idx + 1}
                             </span>
-                            {adminStreams.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveAdminStream(idx)}
-                                className="text-neutral-400 hover:text-red-400 p-1 transition cursor-pointer"
-                                title="Remove server"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAdminStream(idx)}
+                              className="text-neutral-400 hover:text-red-400 p-1 transition cursor-pointer"
+                              title="Clear/Remove server"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
 
                           <div className="space-y-1">
@@ -1311,12 +1366,12 @@ service cloud.firestore {
                     )}
                   </div>
 
-                  <div className="pt-2 flex items-center gap-2">
+                  <div className="pt-2 flex flex-wrap items-center gap-2">
                     <button
                       type="submit"
                       disabled={savingStream || !isMediaDirty}
                       className={cn(
-                        "flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition cursor-pointer",
+                        "flex-1 min-w-[200px] flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition cursor-pointer",
                         isMediaDirty && !savingStream
                           ? "bg-[#E50914] hover:bg-[#b80710] text-white shadow-lg shadow-[#E50914]/25 active:scale-95"
                           : "bg-white/[0.06] text-neutral-500 border border-white/[0.06] cursor-not-allowed opacity-60",
@@ -1333,6 +1388,19 @@ service cloud.firestore {
                           : "No Changes to Save"}
                       </span>
                     </button>
+
+                    {(initialMediaData || adminStreams.some((s) => s.customUrl?.trim())) && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteCurrentSelectedStream}
+                        disabled={savingStream}
+                        className="px-4 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 text-red-400 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer shrink-0"
+                        title="Delete custom stream from Firebase"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete Link</span>
+                      </button>
+                    )}
                   </div>
                 </form>
               </div>
@@ -1404,13 +1472,15 @@ service cloud.firestore {
                             {item.mediaType === "tv" && `(S${item.season} E${item.episode})`}
                           </span>
                         </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E50914]/20 text-[#E50914] font-bold border border-[#E50914]/30 shrink-0">
-                          {streamCount > 1
-                            ? `${streamCount} Streams`
-                            : streamCount === 1
-                              ? item.serverName || "Custom Stream"
-                              : "Overrides Only"}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E50914]/20 text-[#E50914] font-bold border border-[#E50914]/30">
+                            {streamCount > 1
+                              ? `${streamCount} Streams`
+                              : streamCount === 1
+                                ? item.serverName || "Custom Stream"
+                                : "Overrides Only"}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="p-2 rounded-lg bg-black/50 border border-white/5 text-[10px] font-mono text-neutral-400 truncate">

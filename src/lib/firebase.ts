@@ -44,6 +44,7 @@ export interface CustomStreamData {
   title?: string;
   poster?: string | null;
   customUrl?: string; // iframe embed url (primary/fallback)
+  desidubUrl?: string; // DesiDubAnime in-app portal series / movie URL
   serverName?: string;
   badge?: string;
   streams?: CustomStreamLink[]; // Multiple custom stream sources
@@ -120,16 +121,7 @@ export function getStreamDocId(
   return `tv_${mediaId}_${season}_${episode}`;
 }
 
-/**
- * Fetch Custom Stream link from Firestore for a specific movie or episode
- */
-export async function fetchCustomStream(
-  mediaType: "movie" | "tv",
-  mediaId: number,
-  season = 1,
-  episode = 1,
-): Promise<CustomStreamData | null> {
-  const docId = getStreamDocId(mediaType, mediaId, season, episode);
+export async function fetchCustomStreamByDocId(docId: string): Promise<CustomStreamData | null> {
   const now = Date.now();
   const cached = customStreamCache.get(docId);
   if (cached && now - cached.at < 1000 * 60 * 10) {
@@ -155,9 +147,37 @@ export async function fetchCustomStream(
     setFbSession(`stream_${docId}`, null);
     return null;
   } catch (err) {
-    console.warn("Error fetching custom stream:", err);
+    console.warn("Error fetching stream by docId:", err);
     return null;
   }
+}
+
+/**
+ * Fetch Custom Stream link from Firestore for a specific movie or episode
+ */
+export async function fetchCustomStream(
+  mediaType: "movie" | "tv",
+  mediaId: number,
+  season = 1,
+  episode = 1,
+): Promise<CustomStreamData | null> {
+  const docId = getStreamDocId(mediaType, mediaId, season, episode);
+  return await fetchCustomStreamByDocId(docId);
+}
+
+/**
+ * Fetch Custom Stream link for an entire show / anime or movie
+ */
+export async function fetchShowCustomStream(
+  mediaType: "movie" | "tv",
+  mediaId: number,
+): Promise<CustomStreamData | null> {
+  if (mediaType === "movie") {
+    return fetchCustomStream("movie", mediaId, 1, 1);
+  }
+  const seriesDoc = await fetchCustomStreamByDocId(`tv_${mediaId}`);
+  if (seriesDoc) return seriesDoc;
+  return fetchCustomStream("tv", mediaId, 1, 1);
 }
 
 /**
@@ -193,29 +213,63 @@ export async function saveCustomStream(stream: CustomStreamData): Promise<void> 
  * Delete custom stream link
  */
 export async function deleteCustomStream(docId: string): Promise<void> {
-  const docRef = doc(db, "customStreams", docId);
-  await deleteDoc(docRef);
-  customStreamCache.delete(docId);
   try {
-    sessionStorage.removeItem(FB_STORAGE_PREFIX + `stream_${docId}`);
-    sessionStorage.removeItem(FB_STORAGE_PREFIX + "all_custom_streams");
-  } catch {
-    // Ignore
-  }
+    const docRef = doc(db, "customStreams", docId);
+    await deleteDoc(docRef);
+    customStreamCache.delete(docId);
 
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent(CUSTOM_STREAMS_EVENT, { detail: { docId, deleted: true } }),
-    );
+    // If TV show, also attempt to delete related doc variations to guarantee complete deletion
+    if (docId.startsWith("tv_")) {
+      const parts = docId.split("_");
+      if (parts.length > 2) {
+        // e.g. "tv_12345_1_1" -> also delete "tv_12345"
+        const baseId = `tv_${parts[1]}`;
+        await deleteDoc(doc(db, "customStreams", baseId)).catch(() => {});
+        customStreamCache.delete(baseId);
+        try {
+          sessionStorage.removeItem(FB_STORAGE_PREFIX + `stream_${baseId}`);
+        } catch {
+          /* ignore */
+        }
+      } else if (parts.length === 2) {
+        // e.g. "tv_12345" -> also delete "tv_12345_1_1"
+        const ep1Id = `tv_${parts[1]}_1_1`;
+        await deleteDoc(doc(db, "customStreams", ep1Id)).catch(() => {});
+        customStreamCache.delete(ep1Id);
+        try {
+          sessionStorage.removeItem(FB_STORAGE_PREFIX + `stream_${ep1Id}`);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    try {
+      sessionStorage.removeItem(FB_STORAGE_PREFIX + `stream_${docId}`);
+      sessionStorage.removeItem(FB_STORAGE_PREFIX + "all_custom_streams");
+    } catch {
+      // Ignore
+    }
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent(CUSTOM_STREAMS_EVENT, { detail: { docId, deleted: true } }),
+      );
+    }
+  } catch (err) {
+    console.error("Error in deleteCustomStream:", err);
+    throw err;
   }
 }
 
 /**
  * Fetch all configured custom streams (for admin overview and badges)
  */
-export async function fetchAllCustomStreams(): Promise<CustomStreamData[]> {
-  const sessionAll = getFbSession<CustomStreamData[]>("all_custom_streams");
-  if (sessionAll) return sessionAll;
+export async function fetchAllCustomStreams(forceRefresh = false): Promise<CustomStreamData[]> {
+  if (!forceRefresh) {
+    const sessionAll = getFbSession<CustomStreamData[]>("all_custom_streams");
+    if (sessionAll) return sessionAll;
+  }
 
   try {
     const colRef = collection(db, "customStreams");
@@ -285,6 +339,46 @@ export function useIsMovieCustomLinked(movieId: number | undefined | null): bool
   const customIds = useCustomStreamIds();
   if (!movieId) return false;
   return customIds.has(`movie_${movieId}`);
+}
+
+/**
+ * React hook to check if an anime movie specifically has a custom stream link
+ */
+export function useIsAnimeMovieCustomLinked(
+  item:
+    | {
+        id: number;
+        type?: "Movie" | "Series";
+        isMovie?: boolean;
+        isAnime?: boolean;
+        category?: string;
+        genreIds?: number[];
+        originalLanguage?: string;
+        language?: string;
+      }
+    | null
+    | undefined,
+): boolean {
+  const customIds = useCustomStreamIds();
+  if (!item || !item.id) return false;
+
+  const isAnime =
+    Boolean(item.isAnime) ||
+    item.category === "anime" ||
+    (Boolean(item.genreIds?.includes(16)) &&
+      (item.originalLanguage === "ja" || item.language?.toLowerCase() === "ja"));
+
+  // Web series (live-action TV series that are not anime) -> exclude 7Shows badge
+  if (item.category === "webseries" && !isAnime) {
+    return false;
+  }
+
+  return (
+    customIds.has(`movie_${item.id}`) ||
+    customIds.has(`tv_${item.id}`) ||
+    customIds.has(`tv_${item.id}_1_1`) ||
+    customIds.has(`anime_${item.id}`)
+  );
 }
 
 /**

@@ -205,7 +205,12 @@ export function CustomStreamModal({
   };
 
   const handleRemoveStream = (index: number) => {
-    setStreams((prev) => prev.filter((_, i) => i !== index));
+    setStreams((prev) => {
+      if (prev.length <= 1) {
+        return [{ id: "stream-1", serverName: "VIP Server 1", customUrl: "", badge: "Custom VIP" }];
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleStreamChange = (
@@ -329,12 +334,18 @@ export function CustomStreamModal({
   };
 
   const handleDelete = async () => {
-    if (!existingData) return;
     if (!confirm("Are you sure you want to remove all custom settings for this title?")) return;
 
     setLoading(true);
     try {
-      await deleteCustomStream(existingData.id);
+      const docId = getStreamDocId(mediaType, mediaId, season, episode);
+      await deleteCustomStream(docId);
+      if (existingData?.id && existingData.id !== docId) {
+        await deleteCustomStream(existingData.id).catch(() => {});
+      }
+      if (mediaType === "tv") {
+        await deleteCustomStream(`tv_${mediaId}`).catch(() => {});
+      }
       setSuccess("Custom settings removed.");
       setTimeout(() => {
         setLoading(false);
@@ -430,16 +441,14 @@ export function CustomStreamModal({
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                         Custom Server #{idx + 1}
                       </span>
-                      {streams.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveStream(idx)}
-                          className="text-neutral-400 hover:text-red-400 p-1 transition cursor-pointer"
-                          title="Remove this server"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStream(idx)}
+                        className="text-neutral-400 hover:text-red-400 p-1 transition cursor-pointer"
+                        title="Clear/Remove this server"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     <div className="space-y-1">
