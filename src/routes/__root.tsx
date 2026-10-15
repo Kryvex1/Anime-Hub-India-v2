@@ -4,7 +4,6 @@ import { useEffect } from "react";
 
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BottomNav, Header } from "../components/anime/nav";
-import { AnimePortalKeeper } from "../components/anime/anime-portal-keeper";
 import { Toaster } from "../components/ui/sonner";
 import { ConfiguredAnimeProvider } from "../lib/configured-anime-context";
 import { applyThemeToDOM, loadStoredSettings } from "../lib/settings";
@@ -95,8 +94,6 @@ function RootComponent() {
         <main className="min-h-screen pb-20 md:pb-0">
           <Outlet />
         </main>
-        {/* Persistent in-memory Anime Hub webview that retains loaded state without reload */}
-        <AnimePortalKeeper />
         <BottomNav />
         <Toaster position="top-center" />
       </ConfiguredAnimeProvider>

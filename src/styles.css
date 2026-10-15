@@ -1,8 +1,8 @@
 @import "tailwindcss" source(none);
-@source "../src";
 @import "tw-animate-css";
 @import "video.js/dist/video-js.css";
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+@source "../src";
 
 /* JioHotstar Soul Fonts */
 @font-face {
